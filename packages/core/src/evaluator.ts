@@ -97,7 +97,12 @@ export class Evaluator {
     if (deltaShares === 0) return [];
 
     return [
-      { type: 'adjust_stock', positionId: position.id, underlying: position.underlying, deltaShares },
+      {
+        type: 'adjust_stock',
+        positionId: position.id,
+        underlying: position.underlying,
+        deltaShares,
+      },
     ];
   }
 }

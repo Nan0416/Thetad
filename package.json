@@ -15,6 +15,8 @@
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "calendar:generate": "tsx scripts/generate-calendar.ts",
     "calendar:fetch": "tsx scripts/fetch-calendar.ts",
     "verify:alpaca": "tsx scripts/verify-alpaca.ts",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "prettier": "^3.9.5",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"

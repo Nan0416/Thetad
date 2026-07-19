@@ -42,14 +42,14 @@ selling shares below the collateral floor).
 
 Management rules (the pre-committed plan, enforced by the engine):
 
-| Rule | Default | Rationale |
-|---|---|---|
-| Profit target | close options at 50% of credit | risk-adjusted decay: the last 50% of profit costs most of the gamma risk |
-| Time exit | close/roll at 21 DTE | leave before the gamma bell becomes a spike |
-| Stop loss | cost-to-close ≥ 3x credit, debounced | cap the tail; debounce because wide overnight quotes produce false marks |
-| Event exit | flat before earnings/binary events | unintended binaries are how condors and strangles die |
-| Delta band | daily pre-close adjustment toward band mid | never below 100 shares per short call |
-| Rolls | credit-only, must pass entry screen, hard max-roll count | a roll is a close + a new trade; without these constraints rolling is a martingale |
+| Rule          | Default                                                  | Rationale                                                                          |
+| ------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Profit target | close options at 50% of credit                           | risk-adjusted decay: the last 50% of profit costs most of the gamma risk           |
+| Time exit     | close/roll at 21 DTE                                     | leave before the gamma bell becomes a spike                                        |
+| Stop loss     | cost-to-close ≥ 3x credit, debounced                     | cap the tail; debounce because wide overnight quotes produce false marks           |
+| Event exit    | flat before earnings/binary events                       | unintended binaries are how condors and strangles die                              |
+| Delta band    | daily pre-close adjustment toward band mid               | never below 100 shares per short call                                              |
+| Rolls         | credit-only, must pass entry screen, hard max-roll count | a roll is a close + a new trade; without these constraints rolling is a martingale |
 
 Roadmap strategies reuse the same machinery: beta-weighted portfolio hedge
 (SPY overlay), iron condors + residual delta hedge (the defined-risk replica
@@ -170,17 +170,17 @@ and halts.
 
 ## 5. Stack decisions and rationale
 
-| Decision | Choice | Why |
-|---|---|---|
-| Language | TypeScript/Node (npm workspaces) | maintainer preference; discriminated unions fit intents/state machines; one language across daemon+UI |
-| Money | integer cents everywhere, bps for percentages | floats drift in ledgers; comparisons must be exact; one rounding function |
-| Storage | files (JSON/JSONL), no database | local-first, zero ops, `cat`-able; models change fast early; interfaces allow LMDB/Parquet later |
-| UI | daemon serves built React app; Vite dev server only in dev | the product is an always-on process; Electron (if ever) is a thin shell later, not the architecture |
-| Push | SSE, not websockets | one-directional needs; plain HTTP; auto-reconnect |
-| Broker client | thin owned HTTP client + zod, no SDK | Alpaca's JS SDKs lag (esp. options/mleg); we own retries, rate limits, idempotency; ~15 endpoints |
-| CLI | pure client of the daemon's HTTP API | one writer (daemon), many readers; same API the cloud version would expose |
-| Calendar | bundled JSON (2016-2027), no runtime queries | generated from NYSE rules (`calendar:generate`), overwritable with broker-authoritative data (`calendar:fetch`) |
-| Concurrency | single-threaded; backtests as child processes | the loop is IO-bound; simplicity wins until sweeps demand workers |
+| Decision      | Choice                                                     | Why                                                                                                             |
+| ------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Language      | TypeScript/Node (npm workspaces)                           | maintainer preference; discriminated unions fit intents/state machines; one language across daemon+UI           |
+| Money         | integer cents everywhere, bps for percentages              | floats drift in ledgers; comparisons must be exact; one rounding function                                       |
+| Storage       | files (JSON/JSONL), no database                            | local-first, zero ops, `cat`-able; models change fast early; interfaces allow LMDB/Parquet later                |
+| UI            | daemon serves built React app; Vite dev server only in dev | the product is an always-on process; Electron (if ever) is a thin shell later, not the architecture             |
+| Push          | SSE, not websockets                                        | one-directional needs; plain HTTP; auto-reconnect                                                               |
+| Broker client | thin owned HTTP client + zod, no SDK                       | Alpaca's JS SDKs lag (esp. options/mleg); we own retries, rate limits, idempotency; ~15 endpoints               |
+| CLI           | pure client of the daemon's HTTP API                       | one writer (daemon), many readers; same API the cloud version would expose                                      |
+| Calendar      | bundled JSON (2016-2027), no runtime queries               | generated from NYSE rules (`calendar:generate`), overwritable with broker-authoritative data (`calendar:fetch`) |
+| Concurrency   | single-threaded; backtests as child processes              | the loop is IO-bound; simplicity wins until sweeps demand workers                                               |
 
 ## 6. Coding conventions
 
