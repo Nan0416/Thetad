@@ -31,3 +31,23 @@ jobs:
         run: npm test
       - name: Build web UI
         run: npm run build:web
+
+  integ:
+    # Required status check in branch protection, like `ci`. Hits the real
+    # Alpaca PAPER API using repo secrets — same-repo PRs only (fork PRs
+    # don't receive secrets).
+    name: integ
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Integration tests (Alpaca paper account)
+        env:
+          ALPACA_PAPER_KEY_ID: ${{ secrets.ALPACA_PAPER_KEY_ID }}
+          ALPACA_PAPER_SECRET_KEY: ${{ secrets.ALPACA_PAPER_SECRET_KEY }}
+        run: npm run test:integ
