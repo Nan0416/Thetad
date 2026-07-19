@@ -1,3 +1,3 @@
 export * from './broker';
 export * from './alpaca/trading';
-export * from './sim/simBroker';
+export * from './sim/sim-broker';

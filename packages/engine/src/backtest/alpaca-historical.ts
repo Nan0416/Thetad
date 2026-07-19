@@ -5,7 +5,7 @@ import { fromUsd, type Cents } from '../core/money';
 import { OccSymbol } from '../core/occ';
 import { AlpacaHttp } from '../data/providers/alpaca/http';
 import { atomicWriteJson } from '../data/storage/files';
-import type { HistoricalDataSource } from './historicalData';
+import type { HistoricalDataSource } from './historical-data';
 
 const stockBarsSchema = z.object({
   bars: z.array(z.object({ t: z.string(), c: z.number() })).nullish(),

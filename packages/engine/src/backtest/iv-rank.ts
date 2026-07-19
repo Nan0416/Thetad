@@ -1,8 +1,8 @@
-import { impliedVol } from '../core/blackscholes';
+import { impliedVol } from '../core/black-scholes';
 import type { MarketCalendar } from '../core/calendar';
 import { cents, toUsd, type Cents } from '../core/money';
 import { OccSymbol } from '../core/occ';
-import type { HistoricalDataSource } from './historicalData';
+import type { HistoricalDataSource } from './historical-data';
 import { addDaysIso, pickExpiration } from './strategy';
 import type { ShortPutParams } from './types';
 
