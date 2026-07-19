@@ -41,11 +41,28 @@ export class MarketCalendar {
   private readonly maxDate: string;
   private readonly sessionCache = new Map<string, Session | null>();
 
+  private readonly dates: readonly string[];
+
   constructor(days: readonly CalendarDay[]) {
     if (days.length === 0) throw new Error('empty calendar');
     this.byDate = new Map(days.map((d) => [d.date, d]));
+    this.dates = days.map((d) => d.date);
     this.minDate = days[0]!.date;
     this.maxDate = days[days.length - 1]!.date;
+  }
+
+  /** All trading days with startIso <= date <= endIso, ascending. */
+  tradingDaysInRange(startIso: string, endIso: string): readonly string[] {
+    this.assertCovered(startIso);
+    this.assertCovered(endIso);
+    return this.dates.filter((d) => d >= startIso && d <= endIso);
+  }
+
+  /** The last `count` trading days ending at (and including, if trading) endIso. */
+  lastTradingDays(endIso: string, count: number): readonly string[] {
+    this.assertCovered(endIso);
+    const upTo = this.dates.filter((d) => d <= endIso);
+    return upTo.slice(Math.max(0, upTo.length - count));
   }
 
   private static nyseInstance: MarketCalendar | null = null;

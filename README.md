@@ -86,7 +86,8 @@ npm run dev:web
 - [ ] Position manager: full covered-strangle lifecycle (entry, rolls, assignment)
 - [ ] Order manager: atomic multi-leg limit orders worked from mid
 - [ ] Market data cache: minute bars + chain snapshots to JSONL
-- [ ] Backtester: event-driven replay through the same engine
+- [x] Backtester v0: systematic SPY short-put strategy on Alpaca daily history
+- [ ] Backtester: generalize to covered strangles through the live evaluate()
 - [ ] Screener: liquidity gate, IV rank, IV-vs-realized (Yang-Zhang), events
 - [ ] Web UI: positions, journal tail, equity curve, kill switch
 - [ ] Paper-trading burn-in, then live

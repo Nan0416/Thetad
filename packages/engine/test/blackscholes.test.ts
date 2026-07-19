@@ -27,4 +27,16 @@ describe('black-scholes', () => {
     const { vol: _drop, ...rest } = base;
     expect(impliedVol(price, { ...rest, right: 'C' })).toBeCloseTo(0.2, 4);
   });
+
+  it('satisfies put-call parity with a dividend yield', () => {
+    const divInput = { spot: 100, strike: 95, vol: 0.25, tYears: 0.5, rate: 0.05, divYield: 0.02 };
+    const call = bsPrice({ ...divInput, right: 'C' });
+    const put = bsPrice({ ...divInput, right: 'P' });
+    const forwardParity = 100 * Math.exp(-0.02 * 0.5) - 95 * Math.exp(-0.05 * 0.5);
+    expect(call - put).toBeCloseTo(forwardParity, 6);
+    // dividend yield shrinks |delta| by e^{-qT}
+    const withQ = bsGreeks({ ...divInput, right: 'P' }).delta;
+    const withoutQ = bsGreeks({ ...divInput, divYield: 0, right: 'P' }).delta;
+    expect(Math.abs(withQ)).not.toBeCloseTo(Math.abs(withoutQ), 4);
+  });
 });

@@ -11,6 +11,7 @@ npm test                 # vitest, all packages
 npm run check            # tsc --noEmit, all packages + web
 npm run format           # prettier --write (CI enforces format:check)
 npm run test:integ       # integration tests vs Alpaca paper API (needs keys in .env)
+npm run backtest         # SPY short-put backtest vs Alpaca history (see --help in script)
 npm start                # daemon on http://127.0.0.1:7777
 npm run dev:server       # daemon with watch
 npm run dev:web          # Vite dev server (proxies /api to daemon)
