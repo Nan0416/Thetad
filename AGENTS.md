@@ -14,6 +14,7 @@ npm run test:integ       # integration tests vs Alpaca paper API (needs keys in 
 npm run backtest         # SPY short-put backtest vs Alpaca history (see --help in script)
 npm run fetch:contracts  # preload option contract catalog: -- SPY 2025 [--force]
 npm run fetch:bars       # preload 1-minute stock bars: -- SPY 2025 [--force]
+npm run fetch:option-bars # preload option minute bars: -- --from-trades <log.jsonl> or OCC symbols
 npm start                # daemon on http://127.0.0.1:7777
 npm run dev:server       # daemon with watch
 npm run dev:web          # Vite dev server (proxies /api to daemon)
