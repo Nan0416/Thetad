@@ -8,6 +8,7 @@
  * Results print to stdout; the trade log also lands in data/backtests/.
  */
 import {
+  AlpacaDataProvider,
   AlpacaHistoricalData,
   AlpacaHttp,
   DataCatalog,
@@ -57,8 +58,10 @@ const dataSource = new AlpacaHistoricalData(http, './data/backtest-cache');
 // The catalog shares its cache tree with the fetch:* preload scripts and
 // fetches anything missing on demand.
 const catalog = new DataCatalog({
-  dataHttp: http,
-  tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
+  provider: new AlpacaDataProvider({
+    dataHttp: http,
+    tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
+  }),
 });
 
 console.log(`SPY short put ${params.startIso}..${params.endIso}`);

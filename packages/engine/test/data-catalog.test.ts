@@ -3,13 +3,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DataCatalog, nearestStrikeCents } from '../src/data/catalog/data-catalog';
+import { AlpacaDataProvider } from '../src/data/providers/alpaca/data-provider';
 import { AlpacaHttp } from '../src/data/providers/alpaca/http';
 import { cents } from '../src/core/money';
 
 const EXPIRED_OCC = 'SPY240719P00520000';
 
 function contract(type: 'put' | 'call', expiration: string, strike: string) {
-  return { symbol: `x`, type, expiration_date: expiration, strike_price: strike };
+  return {
+    symbol: `SPY-${expiration}-${type}-${strike}`,
+    type,
+    expiration_date: expiration,
+    strike_price: strike,
+  };
 }
 
 /** One fake Alpaca serving all three endpoints, with pagination each. */
@@ -72,7 +78,8 @@ function makeCatalog(dir: string, counter: { calls: number }): DataCatalog {
     baseUrl: 'https://example.test',
     fetchFn: makeFakeFetch(counter),
   });
-  return new DataCatalog({ dataHttp: http, tradingHttp: http, rootDir: dir });
+  const provider = new AlpacaDataProvider({ dataHttp: http, tradingHttp: http });
+  return new DataCatalog({ provider, rootDir: dir });
 }
 
 describe('DataCatalog: contracts', () => {

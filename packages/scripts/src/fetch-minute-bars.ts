@@ -7,7 +7,7 @@
  *
  * Usage: npm run fetch:bars -- SPY 2025 [--force]
  */
-import { AlpacaHttp, DataCatalog } from '@thetad/engine';
+import { AlpacaDataProvider, AlpacaHttp, DataCatalog } from '@thetad/engine';
 
 process.loadEnvFile('.env');
 const keyId = process.env.ALPACA_PAPER_KEY_ID ?? '';
@@ -27,8 +27,10 @@ if (!symbol || !Number.isInteger(year)) {
 }
 
 const catalog = new DataCatalog({
-  dataHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' }),
-  tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
+  provider: new AlpacaDataProvider({
+    dataHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' }),
+    tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
+  }),
 });
 
 const snapshot = await catalog.getStockMinuteBarsRaw(symbol, year, force);

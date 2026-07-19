@@ -3,14 +3,13 @@ import { z } from 'zod';
 import { fromUsd, type Cents } from '../../core/money';
 import { OccSymbol, type OptionRight } from '../../core/occ';
 import type { Bar } from '../../core/types';
-import { AlpacaHttp } from '../providers/alpaca/http';
+import type { AlpacaBar, AlpacaDataProvider } from '../providers/alpaca/data-provider';
 import { TieredCache } from './tiered-cache';
 
-/** Alpaca options data floor — nothing exists before this. */
-const OPTIONS_DATA_FLOOR_ISO = '2024-02-01';
-
 // ---------------------------------------------------------------------------
-// Dataset shapes (cache file formats, all v1, all zod-validated on load)
+// Dataset shapes (cache file formats, all v1, all zod-validated on load).
+// These are OUR models — integer cents, grouped, compact — converted from
+// whatever data model the provider speaks.
 // ---------------------------------------------------------------------------
 
 /** One underlying-year of listed contracts: expiration -> strikes per right. */
@@ -58,7 +57,7 @@ export interface ContractCatalog {
 }
 
 // ---------------------------------------------------------------------------
-// Schemas
+// Cache-file schemas
 // ---------------------------------------------------------------------------
 
 const minuteBarTupleSchema = z.tuple([
@@ -100,56 +99,21 @@ const contractMinuteBarsSchema = z.object({
   bars: z.array(minuteBarTupleSchema),
 });
 
-const contractsResponseSchema = z.object({
-  option_contracts: z
-    .array(
-      z.object({
-        symbol: z.string(),
-        type: z.enum(['put', 'call']),
-        expiration_date: z.string(),
-        strike_price: z.string(),
-      }),
-    )
-    .nullish(),
-  next_page_token: z.string().nullish(),
-});
-
-const rawBarSchema = z.object({
-  t: z.string(),
-  o: z.number(),
-  h: z.number(),
-  l: z.number(),
-  c: z.number(),
-  v: z.number(),
-});
-
-const stockBarsResponseSchema = z.object({
-  bars: z.array(rawBarSchema).nullish(),
-  next_page_token: z.string().nullish(),
-});
-
-const optionBarsResponseSchema = z.object({
-  bars: z.record(z.array(rawBarSchema)).nullish(),
-  next_page_token: z.string().nullish(),
-});
-
 // ---------------------------------------------------------------------------
 // The catalog
 // ---------------------------------------------------------------------------
 
 export interface DataCatalogOptions {
-  /** data.alpaca.markets — bars. */
-  readonly dataHttp: AlpacaHttp;
-  /** paper-api/api.alpaca.markets — contract listings. */
-  readonly tradingHttp: AlpacaHttp;
+  readonly provider: AlpacaDataProvider;
   /** Root of the local cache tree (default ./data). */
   readonly rootDir?: string;
 }
 
 /**
  * Single entry point for cached market data. Every dataset follows the same
- * three tiers (memory -> file -> provider API, see TieredCache); adding a
- * dataset means one fetch function, one schema, one typed method here.
+ * three tiers (memory -> file -> provider API, see TieredCache); the
+ * provider speaks its own data model and this class converts it into ours.
+ * Adding a dataset means one provider call, one schema, one typed method.
  *
  * Cache tree under rootDir:
  *   options/<SYMBOL>-<year>-contracts.json   listed contracts per year
@@ -161,25 +125,33 @@ export interface DataCatalogOptions {
  */
 export class DataCatalog implements ContractCatalog {
   private readonly cache = new TieredCache();
-  private readonly dataHttp: AlpacaHttp;
-  private readonly tradingHttp: AlpacaHttp;
+  private readonly provider: AlpacaDataProvider;
   private readonly rootDir: string;
 
   constructor(options: DataCatalogOptions) {
-    this.dataHttp = options.dataHttp;
-    this.tradingHttp = options.tradingHttp;
+    this.provider = options.provider;
     this.rootDir = options.rootDir ?? './data';
   }
 
   // -- contracts ------------------------------------------------------------
 
-  async getContracts(underlying: string, year: number, forceRefresh = false): Promise<YearContracts> {
+  async getContracts(
+    underlying: string,
+    year: number,
+    forceRefresh = false,
+  ): Promise<YearContracts> {
     const symbol = underlying.toUpperCase();
     return this.cache.get(
       {
         path: join(this.rootDir, 'options', `${symbol}-${year}-contracts.json`),
         schema: yearContractsSchema as z.ZodType<YearContracts>,
-        fetch: () => this.fetchContracts(symbol, year),
+        fetch: async () => {
+          const { contracts } = await this.provider.listOptionContracts({
+            underlying: symbol,
+            year,
+          });
+          return toYearContracts(symbol, year, contracts);
+        },
       },
       forceRefresh,
     );
@@ -209,7 +181,17 @@ export class DataCatalog implements ContractCatalog {
       {
         path: join(this.rootDir, 'stock-minute-bars', `${upper}-${year}.json`),
         schema: yearMinuteBarsSchema as z.ZodType<YearMinuteBars>,
-        fetch: () => this.fetchStockMinuteBars(upper, year),
+        fetch: async () => {
+          const { bars } = await this.provider.getStockMinuteBars({ symbol: upper, year });
+          return {
+            v: 1 as const,
+            symbol: upper,
+            year,
+            timeframe: '1Min' as const,
+            fetchedAtUtc: new Date().toISOString(),
+            bars: bars.map(toTuple),
+          };
+        },
       },
       forceRefresh,
     );
@@ -234,7 +216,20 @@ export class DataCatalog implements ContractCatalog {
       // Only a complete life (fetched through expiration) is served from
       // cache; still-active contracts refetch and extend on each touch.
       isUsable: (cached) => cached.fetchedThroughIso >= expirationIso,
-      fetch: () => this.fetchOptionMinuteBars(occSymbol, expirationIso),
+      fetch: async () => {
+        const { bars } = await this.provider.getOptionMinuteBars({
+          occSymbol,
+          endIso: expirationIso,
+        });
+        const todayIso = new Date().toISOString().slice(0, 10);
+        return {
+          v: 1 as const,
+          occSymbol,
+          fetchedAtUtc: new Date().toISOString(),
+          fetchedThroughIso: expirationIso <= todayIso ? expirationIso : todayIso,
+          bars: bars.map(toTuple),
+        };
+      },
     });
   }
 
@@ -242,120 +237,50 @@ export class DataCatalog implements ContractCatalog {
     const snapshot = await this.getOptionMinuteBarsRaw(occSymbol);
     return tuplesToBars(occSymbol, snapshot.bars);
   }
+}
 
-  // -- provider fetches -----------------------------------------------------
+// ---------------------------------------------------------------------------
+// Provider-model -> our-model conversion
+// ---------------------------------------------------------------------------
 
-  private async fetchContracts(underlying: string, year: number): Promise<YearContracts> {
-    const strikesByExpiration = new Map<string, { P: Set<number>; C: Set<number> }>();
-    for (const status of ['inactive', 'active'] as const) {
-      let pageToken: string | undefined;
-      do {
-        const query: Record<string, string> = {
-          underlying_symbols: underlying,
-          status,
-          expiration_date_gte: `${year}-01-01`,
-          expiration_date_lte: `${year}-12-31`,
-          limit: '10000',
-        };
-        if (pageToken) query.page_token = pageToken;
-        const page = await this.tradingHttp.request(
-          contractsResponseSchema,
-          'GET',
-          '/v2/options/contracts',
-          { query },
-        );
-        for (const contract of page.option_contracts ?? []) {
-          const entry = strikesByExpiration.get(contract.expiration_date) ?? {
-            P: new Set<number>(),
-            C: new Set<number>(),
-          };
-          entry[contract.type === 'put' ? 'P' : 'C'].add(fromUsd(Number(contract.strike_price)));
-          strikesByExpiration.set(contract.expiration_date, entry);
-        }
-        pageToken = page.next_page_token ?? undefined;
-      } while (pageToken);
-    }
-
-    const expirations: Record<string, { putStrikesCents: number[]; callStrikesCents: number[] }> =
-      {};
-    for (const [expirationIso, entry] of [...strikesByExpiration].sort()) {
-      expirations[expirationIso] = {
-        putStrikesCents: [...entry.P].sort((a, b) => a - b),
-        callStrikesCents: [...entry.C].sort((a, b) => a - b),
-      };
-    }
-    return { v: 1, underlying, year, fetchedAtUtc: new Date().toISOString(), expirations };
+function toYearContracts(
+  underlying: string,
+  year: number,
+  contracts: readonly { type: 'put' | 'call'; expiration_date: string; strike_price: string }[],
+): YearContracts {
+  const strikesByExpiration = new Map<string, { P: Set<number>; C: Set<number> }>();
+  for (const contract of contracts) {
+    const entry = strikesByExpiration.get(contract.expiration_date) ?? {
+      P: new Set<number>(),
+      C: new Set<number>(),
+    };
+    entry[contract.type === 'put' ? 'P' : 'C'].add(fromUsd(Number(contract.strike_price)));
+    strikesByExpiration.set(contract.expiration_date, entry);
   }
-
-  private async fetchStockMinuteBars(symbol: string, year: number): Promise<YearMinuteBars> {
-    const bars: MinuteBarTuple[] = [];
-    let pageToken: string | undefined;
-    do {
-      const query: Record<string, string> = {
-        timeframe: '1Min',
-        start: `${year}-01-01`,
-        end: `${year}-12-31T23:59:59Z`,
-        limit: '10000',
-        adjustment: 'split',
-        feed: 'sip',
-      };
-      if (pageToken) query.page_token = pageToken;
-      const page = await this.dataHttp.request(
-        stockBarsResponseSchema,
-        'GET',
-        `/v2/stocks/${symbol}/bars`,
-        { query },
-      );
-      for (const bar of page.bars ?? []) {
-        bars.push([bar.t, fromUsd(bar.o), fromUsd(bar.h), fromUsd(bar.l), fromUsd(bar.c), bar.v]);
-      }
-      pageToken = page.next_page_token ?? undefined;
-    } while (pageToken);
-    return {
-      v: 1,
-      symbol,
-      year,
-      timeframe: '1Min',
-      fetchedAtUtc: new Date().toISOString(),
-      bars,
+  const expirations: Record<string, { putStrikesCents: number[]; callStrikesCents: number[] }> = {};
+  for (const [expirationIso, entry] of [...strikesByExpiration].sort()) {
+    expirations[expirationIso] = {
+      putStrikesCents: [...entry.P].sort((a, b) => a - b),
+      callStrikesCents: [...entry.C].sort((a, b) => a - b),
     };
   }
+  return { v: 1, underlying, year, fetchedAtUtc: new Date().toISOString(), expirations };
+}
 
-  private async fetchOptionMinuteBars(
-    occSymbol: string,
-    expirationIso: string,
-  ): Promise<ContractMinuteBars> {
-    const bars: MinuteBarTuple[] = [];
-    let pageToken: string | undefined;
-    do {
-      const query: Record<string, string> = {
-        symbols: occSymbol,
-        timeframe: '1Min',
-        start: OPTIONS_DATA_FLOOR_ISO,
-        end: `${expirationIso}T23:59:59Z`,
-        limit: '10000',
-      };
-      if (pageToken) query.page_token = pageToken;
-      const page = await this.dataHttp.request(
-        optionBarsResponseSchema,
-        'GET',
-        '/v1beta1/options/bars',
-        { query },
-      );
-      for (const bar of page.bars?.[occSymbol] ?? []) {
-        bars.push([bar.t, fromUsd(bar.o), fromUsd(bar.h), fromUsd(bar.l), fromUsd(bar.c), bar.v]);
-      }
-      pageToken = page.next_page_token ?? undefined;
-    } while (pageToken);
-    const todayIso = new Date().toISOString().slice(0, 10);
-    return {
-      v: 1,
-      occSymbol,
-      fetchedAtUtc: new Date().toISOString(),
-      fetchedThroughIso: expirationIso <= todayIso ? expirationIso : todayIso,
-      bars,
-    };
-  }
+function toTuple(bar: AlpacaBar): MinuteBarTuple {
+  return [bar.t, fromUsd(bar.o), fromUsd(bar.h), fromUsd(bar.l), fromUsd(bar.c), bar.v];
+}
+
+function tuplesToBars(symbol: string, tuples: readonly MinuteBarTuple[]): readonly Bar[] {
+  return tuples.map(([tsUtc, o, h, l, c, v]) => ({
+    symbol,
+    tsUtc,
+    openCents: o as Cents,
+    highCents: h as Cents,
+    lowCents: l as Cents,
+    closeCents: c as Cents,
+    volume: v,
+  }));
 }
 
 /** Nearest listed strike to a reference price; null on empty/missing input. */
@@ -369,16 +294,4 @@ export function nearestStrikeCents(
     if (Math.abs(strike - referenceCents) < Math.abs(best - referenceCents)) best = strike;
   }
   return best;
-}
-
-function tuplesToBars(symbol: string, tuples: readonly MinuteBarTuple[]): readonly Bar[] {
-  return tuples.map(([tsUtc, o, h, l, c, v]) => ({
-    symbol,
-    tsUtc,
-    openCents: o as Cents,
-    highCents: h as Cents,
-    lowCents: l as Cents,
-    closeCents: c as Cents,
-    volume: v,
-  }));
 }
