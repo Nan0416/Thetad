@@ -2,7 +2,7 @@ import type { MarketCalendar } from '../core/calendar';
 import { nyWallToUtc } from '../core/calendar';
 import { cents, type Cents } from '../core/money';
 import { OccSymbol } from '../core/occ';
-import type { ContractCatalog } from './contract-catalog';
+import type { ContractCatalog } from '../data/catalog/data-catalog';
 import type { HistoricalDataSource } from './historical-data';
 import { buildAtmIvSeries, ivRankOn } from './iv-rank';
 import { computeMetrics } from './metrics';

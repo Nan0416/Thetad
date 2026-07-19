@@ -94,6 +94,12 @@ compile time — never fetched at runtime.
 - Every persisted file carries a schema version field `v`; validate with zod
   on load; migrations are zod transforms.
 - Cache/bundle data locally; no remote queries for static data at runtime.
+- **All cached market data flows through `DataCatalog`** (engine `data/catalog/`),
+  whose datasets share the `TieredCache` three-tier read path: memory ->
+  zod-validated cache file -> provider API (fetch, atomic write, memoize).
+  New datasets (calendars, rates, earnings, ...) add one fetch function, one
+  schema, one typed method — plus a per-dataset `isUsable` rule when
+  completeness matters (e.g. option bars complete only after expiration).
 
 ## Boundaries and dependencies
 

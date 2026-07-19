@@ -8,7 +8,7 @@
  *   npm run fetch:option-bars -- --from-trades data/backtests/<run>.jsonl
  *   npm run fetch:option-bars -- SPY240719P00520000 [more symbols...]
  */
-import { AlpacaHttp, AlpacaOptionMinuteBarStore, readJsonl } from '@thetad/engine';
+import { AlpacaHttp, DataCatalog, readJsonl } from '@thetad/engine';
 
 process.loadEnvFile('.env');
 const keyId = process.env.ALPACA_PAPER_KEY_ID ?? '';
@@ -41,12 +41,14 @@ if (occSymbols.size === 0) {
   process.exit(2);
 }
 
-const http = new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' });
-const store = new AlpacaOptionMinuteBarStore(http, './data/option-minute-bars');
+const catalog = new DataCatalog({
+  dataHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' }),
+  tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
+});
 
 let totalBars = 0;
 for (const occ of [...occSymbols].sort()) {
-  const snapshot = await store.getContractRaw(occ);
+  const snapshot = await catalog.getOptionMinuteBarsRaw(occ);
   totalBars += snapshot.bars.length;
   console.log(
     `${occ}: ${snapshot.bars.length} minute bars (through ${snapshot.fetchedThroughIso})`,

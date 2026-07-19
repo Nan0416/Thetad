@@ -6,7 +6,7 @@
  *
  * Usage: npm run fetch:contracts -- SPY 2025 [--force]
  */
-import { AlpacaContractCatalog, AlpacaHttp } from '@thetad/engine';
+import { AlpacaHttp, DataCatalog } from '@thetad/engine';
 
 process.loadEnvFile('.env');
 const keyId = process.env.ALPACA_PAPER_KEY_ID ?? '';
@@ -25,11 +25,12 @@ if (!underlying || !Number.isInteger(year)) {
   process.exit(2);
 }
 
-// Contract listings live on the trading API, not the data API.
-const http = new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' });
-const catalog = new AlpacaContractCatalog(http, './data/options');
+const catalog = new DataCatalog({
+  dataHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' }),
+  tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
+});
 
-const snapshot = await catalog.getYear(underlying, year, force);
+const snapshot = await catalog.getContracts(underlying, year, force);
 const expirations = Object.keys(snapshot.expirations);
 const puts = Object.values(snapshot.expirations).reduce((a, e) => a + e.putStrikesCents.length, 0);
 const calls = Object.values(snapshot.expirations).reduce(
