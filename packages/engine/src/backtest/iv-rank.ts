@@ -2,7 +2,7 @@ import { impliedVol } from '../core/black-scholes';
 import type { MarketCalendar } from '../core/calendar';
 import { cents, toUsd, type Cents } from '../core/money';
 import { OccSymbol } from '../core/occ';
-import { nearestStrikeCents, type ContractCatalog } from './contract-catalog';
+import { nearestStrikeCents, type ContractCatalog } from '../data/catalog/data-catalog';
 import type { HistoricalDataSource } from './historical-data';
 import { addDaysIso, pickExpiration } from './strategy';
 import type { ShortPutParams } from './types';
