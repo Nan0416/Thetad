@@ -48,13 +48,15 @@ roll budget.
 ## Layout
 
 ```
-packages/core     pure engine: evaluate(), risk layer, calendar, Black-Scholes,
-                  money (integer cents), OCC symbols — zero dependencies, no IO
-packages/data     storage (atomic JSON, JSONL), Alpaca market data client
-packages/broker   Broker interface: Alpaca trading client (paper/live), sim
-packages/server   the daemon: Fastify API + SSE, reconcile loop, serves the UI
-apps/web          React UI (Vite) — static files in prod, dev server in dev
-apps/cli          CLI, a pure client of the daemon's HTTP API
+packages/engine/core     pure engine: Evaluator, RiskManager, MarketCalendar,
+                         Black-Scholes, money (integer cents), OCC symbols —
+                         zero dependencies, no IO
+packages/engine/data     storage (atomic JSON, JSONL), Alpaca market data client
+packages/engine/broker   Broker interface: Alpaca trading (paper/live), sim
+packages/server          the daemon: Fastify API + SSE, reconcile loop, serves UI
+packages/web             React UI (Vite) — static files in prod, dev server in dev
+packages/cli             CLI, a pure client of the daemon's HTTP API
+packages/scripts         operational scripts: calendar generate/fetch, verify-alpaca
 ```
 
 ## Quickstart

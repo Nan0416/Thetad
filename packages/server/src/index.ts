@@ -36,7 +36,7 @@ app.get('/api/events', (request, reply) => {
 
 // In production the built web UI is baked into static files served here;
 // in development the Vite dev server proxies /api to this daemon instead.
-const webDist = resolve(import.meta.dirname, '../../../apps/web/dist');
+const webDist = resolve(import.meta.dirname, '../../web/dist');
 if (existsSync(webDist)) {
   app.register(fastifyStatic, { root: webDist });
 }

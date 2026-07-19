@@ -57,14 +57,14 @@ Uniform call shape; adding a field later never breaks a signature.
 
 - Money is **integer cents** (`Cents` branded type), never floats. Percentages
   are **basis points** (integers). All rounding goes through the single
-  helper in `packages/core/src/money.ts` (half away from zero).
+  helper in `packages/engine/core/src/money.ts` (half away from zero).
 - Threshold comparisons use integer cross-multiplication, not division:
   `profit * 10_000 >= targetBps * credit`.
 - Floats are only for estimates: greeks, vols, theoretical prices.
 
 ## Purity of core
 
-`packages/core` has **zero dependencies and no side effects**: no Node APIs,
+`packages/engine/core` has **zero dependencies and no side effects**: no Node APIs,
 no IO, no network, no `Date.now()`, no randomness. Time enters only through
 `snapshot.asof`. Static data (the NYSE calendar) is bundled JSON imported at
 compile time — never fetched at runtime.
