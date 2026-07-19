@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MarketCalendar } from '../src/calendar';
+import { MarketCalendar } from '../src/core/calendar';
 
 const calendar = MarketCalendar.nyse();
 

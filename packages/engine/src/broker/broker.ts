@@ -1,4 +1,4 @@
-import type { Cents } from '@thetad/core';
+import type { Cents } from '../core/index';
 
 export interface Account {
   readonly equityCents: Cents;

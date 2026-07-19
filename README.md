@@ -48,11 +48,12 @@ roll budget.
 ## Layout
 
 ```
-packages/engine/core     pure engine: Evaluator, RiskManager, MarketCalendar,
-                         Black-Scholes, money (integer cents), OCC symbols —
-                         zero dependencies, no IO
-packages/engine/data     storage (atomic JSON, JSONL), Alpaca market data client
-packages/engine/broker   Broker interface: Alpaca trading (paper/live), sim
+packages/engine          @thetad/engine — the trading brain, one package:
+  src/core               Evaluator, RiskManager, MarketCalendar, Black-Scholes,
+                         money (integer cents), OCC symbols — pure, no IO
+  src/data               storage (atomic JSON, JSONL), Alpaca market data client
+  src/broker             Broker interface: Alpaca trading (paper/live), sim
+  test                   engine unit tests
 packages/server          the daemon: Fastify API + SSE, reconcile loop, serves UI
 packages/web             React UI (Vite) — static files in prod, dev server in dev
 packages/cli             CLI, a pure client of the daemon's HTTP API

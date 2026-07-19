@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cents } from '../src/money';
-import { OccSymbol } from '../src/occ';
+import { cents } from '../src/core/money';
+import { OccSymbol } from '../src/core/occ';
 
 describe('OccSymbol', () => {
   it('builds Alpaca-style symbols', () => {

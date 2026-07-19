@@ -1,4 +1,4 @@
-import { fromUsd, type Bar, type MarketSnapshot, type OptionQuote } from '@thetad/core';
+import { fromUsd, type Bar, type MarketSnapshot, type OptionQuote } from '../../../core/index';
 import { z } from 'zod';
 import { AlpacaHttp } from './http';
 

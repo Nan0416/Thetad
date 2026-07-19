@@ -1,5 +1,5 @@
-import { fromUsd, toUsd } from '@thetad/core';
-import { AlpacaHttp } from '@thetad/data';
+import { fromUsd, toUsd } from '../../core/index';
+import { AlpacaHttp } from '../../data/providers/alpaca/http';
 import { z } from 'zod';
 import type {
   Broker,

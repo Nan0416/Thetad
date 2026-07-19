@@ -5,8 +5,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@thetad/broker": "*",
-    "@thetad/core": "*",
-    "@thetad/data": "*"
+    "@thetad/engine": "*"
   }
 }

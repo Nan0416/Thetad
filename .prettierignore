@@ -2,7 +2,7 @@ node_modules/
 dist/
 package-lock.json
 # generated data: one entry per line by design, do not reflow
-packages/engine/core/src/data/
+packages/engine/src/core/data/
 # runtime output
 state/
 data/
