@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { bsPrice } from '../src/core/blackscholes';
+import { bsPrice } from '../src/core/black-scholes';
 import { MarketCalendar } from '../src/core/calendar';
 import { cents, fromUsd, type Cents } from '../src/core/money';
 import { OccSymbol } from '../src/core/occ';
-import type { HistoricalDataSource } from '../src/backtest/historicalData';
+import type { HistoricalDataSource } from '../src/backtest/historical-data';
 import { runShortPutBacktest } from '../src/backtest/runner';
 import type { ShortPutParams } from '../src/backtest/types';
 

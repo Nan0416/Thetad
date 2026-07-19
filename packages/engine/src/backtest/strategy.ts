@@ -1,4 +1,4 @@
-import { impliedVol, bsGreeks } from '../core/blackscholes';
+import { impliedVol, bsGreeks } from '../core/black-scholes';
 import type { MarketCalendar } from '../core/calendar';
 import { cents, toUsd, type Cents } from '../core/money';
 import type { BacktestExitReason, ShortPutParams } from './types';

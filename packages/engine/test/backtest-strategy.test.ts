@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { bsPrice } from '../src/core/blackscholes';
+import { bsPrice } from '../src/core/black-scholes';
 import { MarketCalendar } from '../src/core/calendar';
 import { cents, fromUsd } from '../src/core/money';
-import { ivRankOn } from '../src/backtest/ivrank';
+import { ivRankOn } from '../src/backtest/iv-rank';
 import {
   evaluateBacktestExit,
   pickExpiration,

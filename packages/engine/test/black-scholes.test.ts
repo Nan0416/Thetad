@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bsGreeks, bsPrice, impliedVol } from '../src/core/blackscholes';
+import { bsGreeks, bsPrice, impliedVol } from '../src/core/black-scholes';
 
 // Textbook reference: S=100, K=100, r=5%, vol=20%, T=1y.
 const base = { spot: 100, strike: 100, vol: 0.2, tYears: 1, rate: 0.05 } as const;

@@ -107,6 +107,9 @@ compile time — never fetched at runtime.
 - `xxxCents` for money, `xxxBps` for basis points, `xxxIso` for `YYYY-MM-DD`
   dates, `xxxUtc` for ISO instants / `Date` fields.
 - npm workspaces: `@thetad/<package>`; ESM everywhere (`"type": "module"`).
+- File names are **kebab-case**: `alpaca-historical.ts`, `black-scholes.ts` —
+  including React component files (`app.tsx`). No camelCase or PascalCase
+  file names.
 
 ## Testing
 
