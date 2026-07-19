@@ -1,0 +1,13 @@
+{
+  "name": "@thetad/data",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@thetad/core": "*",
+    "zod": "^3.24.0"
+  }
+}

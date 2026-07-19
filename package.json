@@ -1,0 +1,29 @@
+{
+  "name": "thetad-monorepo",
+  "private": true,
+  "version": "0.0.1",
+  "description": "thetad — an open-source daemon that sells time. Local-first automated options trading.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
+    "test": "vitest run",
+    "dev:server": "tsx watch packages/server/src/index.ts",
+    "dev:web": "npm run dev --workspace @thetad/web",
+    "build:web": "npm run build --workspace @thetad/web",
+    "start": "tsx packages/server/src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
