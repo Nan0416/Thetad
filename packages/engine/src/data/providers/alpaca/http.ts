@@ -54,7 +54,9 @@ export class AlpacaHttp {
       });
 
       if (response.ok) {
-        return schema.parse(await response.json());
+        // Some endpoints (e.g. DELETE /v2/orders/{id}) return 204 with an empty body.
+        const text = await response.text();
+        return schema.parse(text ? JSON.parse(text) : undefined);
       }
       const body = await response.text();
       if (response.status === 401 || response.status === 403) {
