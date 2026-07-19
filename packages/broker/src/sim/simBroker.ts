@@ -1,5 +1,18 @@
 import { cents } from '@thetad/core';
-import type { Account, Broker, BrokerPosition, Order, OrderRequest } from '../broker';
+import type {
+  Broker,
+  CancelOrderRequest,
+  CancelOrderResponse,
+  GetAccountRequest,
+  GetAccountResponse,
+  GetBrokerPositionsRequest,
+  GetBrokerPositionsResponse,
+  GetOrderRequest,
+  GetOrderResponse,
+  Order,
+  SubmitOrderRequest,
+  SubmitOrderResponse,
+} from '../broker';
 
 /**
  * Backtest broker: fills limit orders instantly at the limit price.
@@ -11,45 +24,46 @@ export class SimBroker implements Broker {
   private readonly orders = new Map<string, Order>();
   private seq = 0;
 
-  async getAccount(): Promise<Account> {
+  async getAccount(_request: GetAccountRequest): Promise<GetAccountResponse> {
     return {
-      equityCents: cents(0),
-      buyingPowerCents: cents(0),
-      optionsLevel: 3,
+      account: { equityCents: cents(0), buyingPowerCents: cents(0), optionsLevel: 3 },
     };
   }
 
-  async getPositions(): Promise<BrokerPosition[]> {
-    return [...this.positions.entries()]
-      .filter(([, qty]) => qty !== 0)
-      .map(([symbol, qty]) => ({ symbol, qty, isOption: symbol.length > 6 }));
+  async getPositions(_request: GetBrokerPositionsRequest): Promise<GetBrokerPositionsResponse> {
+    return {
+      positions: [...this.positions.entries()]
+        .filter(([, qty]) => qty !== 0)
+        .map(([symbol, qty]) => ({ symbol, qty, isOption: symbol.length > 6 })),
+    };
   }
 
-  async submitOrder(request: OrderRequest): Promise<Order> {
+  async submitOrder({ order }: SubmitOrderRequest): Promise<SubmitOrderResponse> {
     for (const existing of this.orders.values()) {
-      if (existing.clientOrderId === request.clientOrderId) return existing;
+      if (existing.clientOrderId === order.clientOrderId) return { order: existing };
     }
-    for (const leg of request.legs) {
+    for (const leg of order.legs) {
       const signed = leg.side === 'buy' ? leg.qty : -leg.qty;
       this.positions.set(leg.symbol, (this.positions.get(leg.symbol) ?? 0) + signed);
     }
-    const order: Order = {
+    const filled: Order = {
       id: `sim-${++this.seq}`,
-      clientOrderId: request.clientOrderId,
+      clientOrderId: order.clientOrderId,
       status: 'filled',
-      filledQty: request.legs[0]?.qty ?? 0,
+      filledQty: order.legs[0]?.qty ?? 0,
     };
-    this.orders.set(order.id, order);
-    return order;
+    this.orders.set(filled.id, filled);
+    return { order: filled };
   }
 
-  async getOrder(id: string): Promise<Order> {
-    const order = this.orders.get(id);
-    if (!order) throw new Error(`unknown order: ${id}`);
-    return order;
+  async getOrder({ orderId }: GetOrderRequest): Promise<GetOrderResponse> {
+    const order = this.orders.get(orderId);
+    if (!order) throw new Error(`unknown order: ${orderId}`);
+    return { order };
   }
 
-  async cancelOrder(): Promise<void> {
+  async cancelOrder(_request: CancelOrderRequest): Promise<CancelOrderResponse> {
     // Instant fills -> nothing pending to cancel.
+    return {};
   }
 }

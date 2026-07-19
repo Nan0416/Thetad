@@ -9,12 +9,12 @@ export class AlpacaRejectedError extends Error {
 export class AlpacaRetryExhaustedError extends Error {}
 
 export interface AlpacaHttpOptions {
-  keyId: string;
-  secretKey: string;
-  baseUrl: string;
-  maxRetries?: number;
+  readonly keyId: string;
+  readonly secretKey: string;
+  readonly baseUrl: string;
+  readonly maxRetries?: number;
   /** Injected for tests; defaults to global fetch. */
-  fetchFn?: typeof fetch;
+  readonly fetchFn?: typeof fetch;
 }
 
 /**

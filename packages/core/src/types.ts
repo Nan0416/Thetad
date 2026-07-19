@@ -3,11 +3,11 @@ import type { OptionRight } from './occ';
 
 /** One option leg of a position. qty is in contracts; negative = short. */
 export interface OptionLeg {
-  occSymbol: string;
-  qty: number;
-  right: OptionRight;
-  strikeCents: Cents;
-  expirationIso: string;
+  readonly occSymbol: string;
+  readonly qty: number;
+  readonly right: OptionRight;
+  readonly strikeCents: Cents;
+  readonly expirationIso: string;
 }
 
 export type PositionKind = 'covered_strangle';
@@ -19,60 +19,60 @@ export type PositionStatus = 'open' | 'closing' | 'closed';
  */
 export interface PositionPlan {
   /** Close options at this fraction of entry credit captured, e.g. 5000 = 50%. */
-  profitTargetBps: Bps;
+  readonly profitTargetBps: Bps;
   /** Close when cost-to-close reaches this multiple of credit, e.g. 30000 = 3x. */
-  stopLossBps: Bps;
+  readonly stopLossBps: Bps;
   /** Close/roll when calendar DTE of the nearest leg reaches this. */
-  timeExitDte: number;
+  readonly timeExitDte: number;
   /** Keep net delta (in share-equivalents) inside this band. */
-  deltaBandShares: { min: number; max: number };
+  readonly deltaBandShares: { readonly min: number; readonly max: number };
   /** Only evaluate delta adjustments within this many minutes of the close. */
-  adjustWindowMinutes: number;
-  maxRolls: number;
+  readonly adjustWindowMinutes: number;
+  readonly maxRolls: number;
 }
 
 export interface Position {
-  id: string;
-  kind: PositionKind;
-  underlying: string;
+  readonly id: string;
+  readonly kind: PositionKind;
+  readonly underlying: string;
   /** Shares of the underlying held as coverage + delta dial. */
-  shares: number;
-  legs: OptionLeg[];
+  readonly shares: number;
+  readonly legs: readonly OptionLeg[];
   /** Total premium received at entry (contracts x 100 x per-share price). */
-  entryCreditCents: Cents;
-  rollCount: number;
-  status: PositionStatus;
+  readonly entryCreditCents: Cents;
+  readonly rollCount: number;
+  readonly status: PositionStatus;
   /** From snapshot.asof at entry — never wall clock. */
-  openedAtUtc: string;
-  plan: PositionPlan;
+  readonly openedAtUtc: string;
+  readonly plan: PositionPlan;
 }
 
 export interface EquityQuote {
-  symbol: string;
-  bidCents: Cents;
-  askCents: Cents;
+  readonly symbol: string;
+  readonly bidCents: Cents;
+  readonly askCents: Cents;
 }
 
 export interface OptionQuote {
-  occSymbol: string;
-  bidCents: Cents;
-  askCents: Cents;
-  delta?: number;
-  gamma?: number;
-  thetaPerDay?: number;
-  vegaPerPoint?: number;
-  iv?: number;
+  readonly occSymbol: string;
+  readonly bidCents: Cents;
+  readonly askCents: Cents;
+  readonly delta?: number;
+  readonly gamma?: number;
+  readonly thetaPerDay?: number;
+  readonly vegaPerPoint?: number;
+  readonly iv?: number;
 }
 
 export interface Bar {
-  symbol: string;
+  readonly symbol: string;
   /** Bar close time, ISO UTC. A snapshot at T may only contain bars closing <= T. */
-  tsUtc: string;
-  openCents: Cents;
-  highCents: Cents;
-  lowCents: Cents;
-  closeCents: Cents;
-  volume: number;
+  readonly tsUtc: string;
+  readonly openCents: Cents;
+  readonly highCents: Cents;
+  readonly lowCents: Cents;
+  readonly closeCents: Cents;
+  readonly volume: number;
 }
 
 /**
@@ -80,21 +80,26 @@ export interface Bar {
  * in backtest it is the replayed bar time, live it is stamped at assembly.
  */
 export interface MarketSnapshot {
-  asof: Date;
-  equities: Record<string, EquityQuote>;
-  options: Record<string, OptionQuote>;
+  readonly asof: Date;
+  readonly equities: Readonly<Record<string, EquityQuote>>;
+  readonly options: Readonly<Record<string, OptionQuote>>;
 }
 
 export interface PortfolioState {
-  positions: Position[];
-  equityCents: Cents;
-  highWaterEquityCents: Cents;
-  killSwitch: boolean;
+  readonly positions: readonly Position[];
+  readonly equityCents: Cents;
+  readonly highWaterEquityCents: Cents;
+  readonly killSwitch: boolean;
 }
 
 export type CloseReason = 'profit_target' | 'stop_loss' | 'time_exit' | 'event_exit' | 'risk_halt';
 
 export type Intent =
-  | { type: 'close_options'; positionId: string; reason: CloseReason }
-  | { type: 'adjust_stock'; positionId: string; underlying: string; deltaShares: number }
-  | { type: 'halt'; reason: string };
+  | { readonly type: 'close_options'; readonly positionId: string; readonly reason: CloseReason }
+  | {
+      readonly type: 'adjust_stock';
+      readonly positionId: string;
+      readonly underlying: string;
+      readonly deltaShares: number;
+    }
+  | { readonly type: 'halt'; readonly reason: string };

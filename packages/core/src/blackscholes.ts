@@ -27,15 +27,15 @@ export function normPdf(x: number): number {
 }
 
 export interface BsInput {
-  spot: number;
-  strike: number;
+  readonly spot: number;
+  readonly strike: number;
   /** Annualized implied volatility as a decimal, e.g. 0.20. */
-  vol: number;
+  readonly vol: number;
   /** Time to expiration in years. */
-  tYears: number;
+  readonly tYears: number;
   /** Annualized risk-free rate as a decimal. */
-  rate: number;
-  right: OptionRight;
+  readonly rate: number;
+  readonly right: OptionRight;
 }
 
 function d1d2({ spot, strike, vol, tYears, rate }: BsInput): [number, number] {
@@ -57,13 +57,13 @@ export function bsPrice(input: BsInput): number {
 }
 
 export interface Greeks {
-  delta: number;
+  readonly delta: number;
   /** Per $1 of spot move. */
-  gamma: number;
+  readonly gamma: number;
   /** Per calendar day. */
-  thetaPerDay: number;
+  readonly thetaPerDay: number;
   /** Per 1 vol point (0.01). */
-  vegaPerPoint: number;
+  readonly vegaPerPoint: number;
 }
 
 export function bsGreeks(input: BsInput): Greeks {

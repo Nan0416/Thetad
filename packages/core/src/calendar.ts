@@ -1,36 +1,27 @@
 /**
- * NYSE trading calendar. All public functions take/return UTC instants;
- * this module is the ONLY place that knows about America/New_York.
- *
- * Sessions: 09:30–16:00 ET, 09:30–13:00 ET on half days.
- * Holiday/half-day tables are maintained by hand (2024–2027).
+ * NYSE trading calendar, backed by bundled session data (see
+ * scripts/generate-calendar.ts and scripts/fetch-calendar.ts) so nothing is
+ * ever queried remotely at runtime. All public methods take/return UTC
+ * instants; this module is the ONLY place that knows about America/New_York.
  */
 
-const HOLIDAYS = new Set([
-  // 2024
-  '2024-01-01', '2024-01-15', '2024-02-19', '2024-03-29', '2024-05-27',
-  '2024-06-19', '2024-07-04', '2024-09-02', '2024-11-28', '2024-12-25',
-  // 2025 (incl. Jan 9 National Day of Mourning closure)
-  '2025-01-01', '2025-01-09', '2025-01-20', '2025-02-17', '2025-04-18',
-  '2025-05-26', '2025-06-19', '2025-07-04', '2025-09-01', '2025-11-27',
-  '2025-12-25',
-  // 2026 (Jul 4 observed Fri Jul 3)
-  '2026-01-01', '2026-01-19', '2026-02-16', '2026-04-03', '2026-05-25',
-  '2026-06-19', '2026-07-03', '2026-09-07', '2026-11-26', '2026-12-25',
-  // 2027 (Juneteenth observed Fri Jun 18, Jul 4 observed Mon Jul 5,
-  // Christmas observed Fri Dec 24)
-  '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31',
-  '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24',
-]);
+import calendarData from './data/nyse-calendar.json';
 
-const HALF_DAYS = new Set([
-  '2024-07-03', '2024-11-29', '2024-12-24',
-  '2025-07-03', '2025-11-28', '2025-12-24',
-  '2026-11-27', '2026-12-24',
-  '2027-11-26',
-]);
+export interface CalendarDay {
+  /** YYYY-MM-DD (New York date). */
+  readonly date: string;
+  /** Wall-clock ET open, e.g. "09:30". */
+  readonly open: string;
+  /** Wall-clock ET close: "16:00", or "13:00" on half days. */
+  readonly close: string;
+}
 
-const CALENDAR_YEARS = { min: 2024, max: 2027 };
+export interface Session {
+  readonly dateIso: string;
+  readonly openUtc: Date;
+  readonly closeUtc: Date;
+  readonly isHalfDay: boolean;
+}
 
 const NY_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/New_York',
@@ -44,16 +35,101 @@ const NY_OFFSET_FMT = new Intl.DateTimeFormat('en-US', {
   timeZoneName: 'shortOffset',
 });
 
-function assertCovered(dateIso: string): void {
-  const year = Number(dateIso.slice(0, 4));
-  if (year < CALENDAR_YEARS.min || year > CALENDAR_YEARS.max) {
-    throw new Error(`date ${dateIso} outside calendar coverage ${CALENDAR_YEARS.min}-${CALENDAR_YEARS.max}`);
+export class MarketCalendar {
+  private readonly byDate: ReadonlyMap<string, CalendarDay>;
+  private readonly minDate: string;
+  private readonly maxDate: string;
+  private readonly sessionCache = new Map<string, Session | null>();
+
+  constructor(days: readonly CalendarDay[]) {
+    if (days.length === 0) throw new Error('empty calendar');
+    this.byDate = new Map(days.map((d) => [d.date, d]));
+    this.minDate = days[0]!.date;
+    this.maxDate = days[days.length - 1]!.date;
+  }
+
+  private static nyseInstance: MarketCalendar | null = null;
+
+  /** The bundled NYSE calendar. */
+  static nyse(): MarketCalendar {
+    return (MarketCalendar.nyseInstance ??= new MarketCalendar(calendarData));
+  }
+
+  private assertCovered(dateIso: string): void {
+    if (dateIso.slice(0, 4) < this.minDate.slice(0, 4) || dateIso.slice(0, 4) > this.maxDate.slice(0, 4)) {
+      throw new Error(`date ${dateIso} outside calendar coverage ${this.minDate}..${this.maxDate}`);
+    }
+  }
+
+  /** The New York calendar date (YYYY-MM-DD) of a UTC instant. */
+  nyDateOf(asof: Date): string {
+    return NY_DATE_FMT.format(asof);
+  }
+
+  isTradingDay(dateIso: string): boolean {
+    this.assertCovered(dateIso);
+    return this.byDate.has(dateIso);
+  }
+
+  sessionForDay(dateIso: string): Session | null {
+    if (this.sessionCache.has(dateIso)) return this.sessionCache.get(dateIso)!;
+    this.assertCovered(dateIso);
+    const day = this.byDate.get(dateIso);
+    let session: Session | null = null;
+    if (day) {
+      const [openH, openM] = splitWall(day.open);
+      const [closeH, closeM] = splitWall(day.close);
+      session = {
+        dateIso,
+        openUtc: nyWallToUtc(dateIso, openH, openM),
+        closeUtc: nyWallToUtc(dateIso, closeH, closeM),
+        isHalfDay: day.close !== '16:00',
+      };
+    }
+    this.sessionCache.set(dateIso, session);
+    return session;
+  }
+
+  isMarketOpen(asof: Date): boolean {
+    const session = this.sessionForDay(this.nyDateOf(asof));
+    if (!session) return false;
+    return asof >= session.openUtc && asof < session.closeUtc;
+  }
+
+  /** Minutes until today's close; null if the market is closed at `asof`. */
+  minutesToClose(asof: Date): number | null {
+    if (!this.isMarketOpen(asof)) return null;
+    const session = this.sessionForDay(this.nyDateOf(asof))!;
+    return Math.floor((session.closeUtc.getTime() - asof.getTime()) / 60_000);
+  }
+
+  /** Calendar days from the NY date of `asof` until `dateIso` (DTE convention). */
+  calendarDte(asof: Date, dateIso: string): number {
+    const from = this.nyDateOf(asof);
+    const ms = Date.parse(`${dateIso}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
+    return Math.round(ms / 86_400_000);
+  }
+
+  /** Trading days strictly after the NY date of `asof`, up to and including `dateIso`. */
+  tradingDaysUntil(asof: Date, dateIso: string): number {
+    let cursor = this.nyDateOf(asof);
+    let count = 0;
+    while (cursor < dateIso) {
+      cursor = addDaysIso(cursor, 1);
+      if (this.isTradingDay(cursor)) count++;
+    }
+    return count;
   }
 }
 
-/** The New York calendar date (YYYY-MM-DD) of a UTC instant. */
-export function nyDateOf(asof: Date): string {
-  return NY_DATE_FMT.format(asof);
+function splitWall(wall: string): [number, number] {
+  const [h, m] = wall.split(':').map(Number) as [number, number];
+  return [h, m];
+}
+
+function addDaysIso(dateIso: string, days: number): string {
+  const [y, m, d] = dateIso.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 function nyOffsetMinutes(at: Date): number {
@@ -76,67 +152,4 @@ export function nyWallToUtc(dateIso: string, hour: number, minute: number): Date
     utc = Date.UTC(y, mo - 1, d, hour, minute) - offset * 60_000;
   }
   return new Date(utc);
-}
-
-export function isTradingDay(dateIso: string): boolean {
-  assertCovered(dateIso);
-  const [y, m, d] = dateIso.split('-').map(Number) as [number, number, number];
-  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  if (weekday === 0 || weekday === 6) return false;
-  return !HOLIDAYS.has(dateIso);
-}
-
-export interface Session {
-  dateIso: string;
-  openUtc: Date;
-  closeUtc: Date;
-  isHalfDay: boolean;
-}
-
-export function sessionForDay(dateIso: string): Session | null {
-  if (!isTradingDay(dateIso)) return null;
-  const isHalfDay = HALF_DAYS.has(dateIso);
-  return {
-    dateIso,
-    openUtc: nyWallToUtc(dateIso, 9, 30),
-    closeUtc: nyWallToUtc(dateIso, isHalfDay ? 13 : 16, 0),
-    isHalfDay,
-  };
-}
-
-export function isMarketOpen(asof: Date): boolean {
-  const session = sessionForDay(nyDateOf(asof));
-  if (!session) return false;
-  return asof >= session.openUtc && asof < session.closeUtc;
-}
-
-/** Minutes until today's close; null if the market is closed at `asof`. */
-export function minutesToClose(asof: Date): number | null {
-  if (!isMarketOpen(asof)) return null;
-  const session = sessionForDay(nyDateOf(asof))!;
-  return Math.floor((session.closeUtc.getTime() - asof.getTime()) / 60_000);
-}
-
-function addDaysIso(dateIso: string, days: number): string {
-  const [y, m, d] = dateIso.split('-').map(Number) as [number, number, number];
-  const next = new Date(Date.UTC(y, m - 1, d + days));
-  return next.toISOString().slice(0, 10);
-}
-
-/** Calendar days from the NY date of `asof` until `dateIso` (DTE convention). */
-export function calendarDte(asof: Date, dateIso: string): number {
-  const from = nyDateOf(asof);
-  const ms = Date.parse(`${dateIso}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
-  return Math.round(ms / 86_400_000);
-}
-
-/** Trading days strictly after the NY date of `asof`, up to and including `dateIso`. */
-export function tradingDaysUntil(asof: Date, dateIso: string): number {
-  let cursor = nyDateOf(asof);
-  let count = 0;
-  while (cursor < dateIso) {
-    cursor = addDaysIso(cursor, 1);
-    if (isTradingDay(cursor)) count++;
-  }
-  return count;
 }

@@ -15,6 +15,9 @@
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "test": "vitest run",
+    "calendar:generate": "tsx scripts/generate-calendar.ts",
+    "calendar:fetch": "tsx scripts/fetch-calendar.ts",
+    "verify:alpaca": "tsx scripts/verify-alpaca.ts",
     "dev:server": "tsx watch packages/server/src/index.ts",
     "dev:web": "npm run dev --workspace @thetad/web",
     "build:web": "npm run build --workspace @thetad/web",

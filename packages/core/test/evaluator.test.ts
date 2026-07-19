@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { evaluate } from '../src/evaluate';
-import { cents, type Cents } from '../src/money';
+import { MarketCalendar } from '../src/calendar';
+import { Evaluator } from '../src/evaluator';
+import { cents } from '../src/money';
 import type { MarketSnapshot, PortfolioState, Position } from '../src/types';
 
 const CALL = 'XYZ260918C00110000';
 const PUT = 'XYZ260918P00090000';
+
+const evaluator = new Evaluator(MarketCalendar.nyse());
+const evaluate = (state: PortfolioState, snapshot: MarketSnapshot) =>
+  evaluator.evaluate(state, snapshot);
 
 function makePosition(overrides: Partial<Position> = {}): Position {
   return {
@@ -47,17 +52,18 @@ interface QuoteSpec {
 }
 
 function makeSnapshot(asofIso: string, quotes: Record<string, QuoteSpec>): MarketSnapshot {
-  const options: MarketSnapshot['options'] = {};
-  for (const [occ, spec] of Object.entries(quotes)) {
-    const half = 10;
-    const entry: MarketSnapshot['options'][string] = {
-      occSymbol: occ,
-      bidCents: cents(spec.midCents - half),
-      askCents: cents(spec.midCents + half),
-    };
-    if (spec.delta !== undefined) entry.delta = spec.delta;
-    options[occ] = entry;
-  }
+  const half = 10;
+  const options = Object.fromEntries(
+    Object.entries(quotes).map(([occ, spec]) => [
+      occ,
+      {
+        occSymbol: occ,
+        bidCents: cents(spec.midCents - half),
+        askCents: cents(spec.midCents + half),
+        ...(spec.delta !== undefined && { delta: spec.delta }),
+      },
+    ]),
+  );
   return { asof: new Date(asofIso), equities: {}, options };
 }
 

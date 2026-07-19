@@ -34,23 +34,43 @@ const optionSnapshotsResponseSchema = z.object({
   next_page_token: z.string().nullish(),
 });
 
+export interface GetStockBarsRequest {
+  readonly symbol: string;
+  readonly timeframe: '1Min' | '1Day';
+  readonly startIso: string;
+  readonly endIso: string;
+}
+export interface GetStockBarsResponse {
+  readonly bars: readonly Bar[];
+}
+
+export interface GetOptionChainRequest {
+  readonly underlying: string;
+}
+export interface GetOptionChainResponse {
+  /** Keyed by OCC symbol. */
+  readonly quotes: Readonly<Record<string, OptionQuote>>;
+}
+
+export interface GetSnapshotRequest {
+  readonly occSymbolsByUnderlying: Readonly<Record<string, readonly string[]>>;
+}
+export interface GetSnapshotResponse {
+  readonly snapshot: MarketSnapshot;
+}
+
 /** Alpaca market data API (data.alpaca.markets). */
 export class AlpacaMarketData {
   constructor(private readonly http: AlpacaHttp) {}
 
-  async getStockBars(
-    symbol: string,
-    timeframe: '1Min' | '1Day',
-    startIso: string,
-    endIso: string,
-  ): Promise<Bar[]> {
+  async getStockBars(request: GetStockBarsRequest): Promise<GetStockBarsResponse> {
     const bars: Bar[] = [];
     let pageToken: string | undefined;
     do {
       const query: Record<string, string> = {
-        timeframe,
-        start: startIso,
-        end: endIso,
+        timeframe: request.timeframe,
+        start: request.startIso,
+        end: request.endIso,
         limit: '10000',
         adjustment: 'split',
         feed: 'sip',
@@ -59,12 +79,12 @@ export class AlpacaMarketData {
       const page = await this.http.request(
         barsResponseSchema,
         'GET',
-        `/v2/stocks/${symbol}/bars`,
+        `/v2/stocks/${request.symbol}/bars`,
         { query },
       );
       for (const b of page.bars ?? []) {
         bars.push({
-          symbol,
+          symbol: request.symbol,
           tsUtc: b.t,
           openCents: fromUsd(b.o),
           highCents: fromUsd(b.h),
@@ -75,11 +95,10 @@ export class AlpacaMarketData {
       }
       pageToken = page.next_page_token ?? undefined;
     } while (pageToken);
-    return bars;
+    return { bars };
   }
 
-  /** Snapshot quotes + greeks for a whole chain, keyed by OCC symbol. */
-  async getOptionChain(underlying: string): Promise<Record<string, OptionQuote>> {
+  async getOptionChain(request: GetOptionChainRequest): Promise<GetOptionChainResponse> {
     const quotes: Record<string, OptionQuote> = {};
     let pageToken: string | undefined;
     do {
@@ -88,7 +107,7 @@ export class AlpacaMarketData {
       const page = await this.http.request(
         optionSnapshotsResponseSchema,
         'GET',
-        `/v1beta1/options/snapshots/${underlying}`,
+        `/v1beta1/options/snapshots/${request.underlying}`,
         { query },
       );
       for (const [occSymbol, snap] of Object.entries(page.snapshots)) {
@@ -97,29 +116,29 @@ export class AlpacaMarketData {
           occSymbol,
           bidCents: fromUsd(snap.latestQuote.bp),
           askCents: fromUsd(snap.latestQuote.ap),
+          ...(snap.greeks?.delta != null && { delta: snap.greeks.delta }),
+          ...(snap.greeks?.gamma != null && { gamma: snap.greeks.gamma }),
+          ...(snap.greeks?.theta != null && { thetaPerDay: snap.greeks.theta }),
+          ...(snap.greeks?.vega != null && { vegaPerPoint: snap.greeks.vega }),
+          ...(snap.impliedVolatility != null && { iv: snap.impliedVolatility }),
         };
-        if (snap.greeks?.delta != null) quote.delta = snap.greeks.delta;
-        if (snap.greeks?.gamma != null) quote.gamma = snap.greeks.gamma;
-        if (snap.greeks?.theta != null) quote.thetaPerDay = snap.greeks.theta;
-        if (snap.greeks?.vega != null) quote.vegaPerPoint = snap.greeks.vega;
-        if (snap.impliedVolatility != null) quote.iv = snap.impliedVolatility;
         quotes[occSymbol] = quote;
       }
       pageToken = page.next_page_token ?? undefined;
     } while (pageToken);
-    return quotes;
+    return { quotes };
   }
 
   /** Assemble a MarketSnapshot for the given contracts. asof is stamped here. */
-  async getSnapshot(occSymbolsByUnderlying: Record<string, string[]>): Promise<MarketSnapshot> {
-    const options: MarketSnapshot['options'] = {};
-    for (const [underlying, occSymbols] of Object.entries(occSymbolsByUnderlying)) {
-      const chain = await this.getOptionChain(underlying);
+  async getSnapshot(request: GetSnapshotRequest): Promise<GetSnapshotResponse> {
+    const options: Record<string, OptionQuote> = {};
+    for (const [underlying, occSymbols] of Object.entries(request.occSymbolsByUnderlying)) {
+      const { quotes } = await this.getOptionChain({ underlying });
       for (const occ of occSymbols) {
-        const quote = chain[occ];
+        const quote = quotes[occ];
         if (quote) options[occ] = quote;
       }
     }
-    return { asof: new Date(), equities: {}, options };
+    return { snapshot: { asof: new Date(), equities: {}, options } };
   }
 }

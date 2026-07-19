@@ -3,5 +3,5 @@ export * from './occ';
 export * from './calendar';
 export * from './blackscholes';
 export * from './types';
-export * from './evaluate';
+export * from './evaluator';
 export * from './risk';
