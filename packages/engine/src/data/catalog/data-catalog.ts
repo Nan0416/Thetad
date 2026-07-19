@@ -1,9 +1,11 @@
 import { join } from 'node:path';
 import { z } from 'zod';
+import fomcDecisionDays from '../../core/data/fomc-decision-days.json';
 import { fromUsd, type Cents } from '../../core/money';
 import { OccSymbol, type OptionRight } from '../../core/occ';
 import type { Bar } from '../../core/types';
 import type { AlpacaBar, AlpacaDataProvider } from '../providers/alpaca/data-provider';
+import { FRED_RELEASE_IDS, type FredDataProvider } from '../providers/fred/data-provider';
 import { TieredCache } from './tiered-cache';
 
 // ---------------------------------------------------------------------------
@@ -45,6 +47,36 @@ export interface ContractMinuteBars {
   /** Data is complete once fetched through the contract's expiration. */
   readonly fetchedThroughIso: string;
   readonly bars: readonly MinuteBarTuple[];
+}
+
+/** Macro releases tracked for the event calendar (FRED-backed). */
+export type MacroRelease = keyof typeof FRED_RELEASE_IDS;
+
+export interface ReleaseDates {
+  readonly v: 1;
+  readonly release: string;
+  readonly releaseId: number;
+  readonly fetchedAtUtc: string;
+  /** Ascending; includes the scheduled forward calendar. */
+  readonly dates: readonly string[];
+}
+
+/** Daily FRED series, e.g. DGS1MO (risk-free rate) or VIXCLS. */
+export interface FredDailySeries {
+  readonly v: 1;
+  readonly seriesId: string;
+  readonly fetchedAtUtc: string;
+  /** [dateIso, value] — value null where FRED reports missing ("."). */
+  readonly observations: readonly (readonly [string, number | null])[];
+}
+
+export type MacroEventKind = 'FOMC' | MacroRelease;
+
+export interface MacroEvent {
+  readonly dateIso: string;
+  readonly event: MacroEventKind;
+  /** CPI/NFP/PCE drop 8:30am ET (last exit: prior close); FOMC is 2pm ET. */
+  readonly session: 'pre_open' | 'intraday';
 }
 
 /** The slice of the catalog the backtester's strike selection consumes. */
@@ -99,12 +131,29 @@ const contractMinuteBarsSchema = z.object({
   bars: z.array(minuteBarTupleSchema),
 });
 
+const releaseDatesSchema = z.object({
+  v: z.literal(1),
+  release: z.string(),
+  releaseId: z.number(),
+  fetchedAtUtc: z.string(),
+  dates: z.array(z.string()),
+});
+
+const fredDailySeriesSchema = z.object({
+  v: z.literal(1),
+  seriesId: z.string(),
+  fetchedAtUtc: z.string(),
+  observations: z.array(z.tuple([z.string(), z.number().nullable()])),
+});
+
 // ---------------------------------------------------------------------------
 // The catalog
 // ---------------------------------------------------------------------------
 
 export interface DataCatalogOptions {
   readonly provider: AlpacaDataProvider;
+  /** Required only for the FRED-backed reference datasets. */
+  readonly fredProvider?: FredDataProvider;
   /** Root of the local cache tree (default ./data). */
   readonly rootDir?: string;
 }
@@ -126,11 +175,89 @@ export interface DataCatalogOptions {
 export class DataCatalog implements ContractCatalog {
   private readonly cache = new TieredCache();
   private readonly provider: AlpacaDataProvider;
+  private readonly fredProvider: FredDataProvider | undefined;
   private readonly rootDir: string;
 
   constructor(options: DataCatalogOptions) {
     this.provider = options.provider;
+    this.fredProvider = options.fredProvider;
     this.rootDir = options.rootDir ?? './data';
+  }
+
+  private fred(): FredDataProvider {
+    if (!this.fredProvider) {
+      throw new Error('this dataset needs a FredDataProvider (FRED_API_KEY) — none was configured');
+    }
+    return this.fredProvider;
+  }
+
+  // -- reference data (FRED + bundled FOMC) ---------------------------------
+
+  async getReleaseDates(release: MacroRelease, forceRefresh = false): Promise<ReleaseDates> {
+    const releaseId = FRED_RELEASE_IDS[release];
+    return this.cache.get(
+      {
+        path: join(this.rootDir, 'reference', `release-dates-${release}.json`),
+        schema: releaseDatesSchema as z.ZodType<ReleaseDates>,
+        fetch: async () => {
+          const { dates } = await this.fred().getReleaseDates({ releaseId });
+          return {
+            v: 1 as const,
+            release,
+            releaseId,
+            fetchedAtUtc: new Date().toISOString(),
+            dates,
+          };
+        },
+      },
+      forceRefresh,
+    );
+  }
+
+  async getFredDailySeries(seriesId: string, forceRefresh = false): Promise<FredDailySeries> {
+    return this.cache.get(
+      {
+        path: join(this.rootDir, 'reference', `fred-series-${seriesId}.json`),
+        schema: fredDailySeriesSchema as z.ZodType<FredDailySeries>,
+        fetch: async () => {
+          const { observations } = await this.fred().getSeriesObservations({ seriesId });
+          return {
+            v: 1 as const,
+            seriesId,
+            fetchedAtUtc: new Date().toISOString(),
+            observations: observations.map(
+              (o) => [o.date, o.value === '.' ? null : Number(o.value)] as const,
+            ),
+          };
+        },
+      },
+      forceRefresh,
+    );
+  }
+
+  /**
+   * The combined macro event calendar: bundled FOMC decision days (hand-
+   * curated from federalreserve.gov, 2024-2027) + FRED release dates for
+   * CPI/NFP/PCE. Sorted ascending; forward schedule included as far as the
+   * sources publish it.
+   */
+  async getMacroEvents(forceRefresh = false): Promise<readonly MacroEvent[]> {
+    const events: MacroEvent[] = fomcDecisionDays.map((dateIso) => ({
+      dateIso,
+      event: 'FOMC' as const,
+      session: 'intraday' as const,
+    }));
+    for (const release of Object.keys(FRED_RELEASE_IDS) as MacroRelease[]) {
+      const { dates } = await this.getReleaseDates(release, forceRefresh);
+      events.push(
+        ...dates.map((dateIso) => ({
+          dateIso,
+          event: release,
+          session: 'pre_open' as const,
+        })),
+      );
+    }
+    return events.sort((a, b) => (a.dateIso < b.dateIso ? -1 : a.dateIso > b.dateIso ? 1 : 0));
   }
 
   // -- contracts ------------------------------------------------------------
