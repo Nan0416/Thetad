@@ -1,0 +1,9 @@
+{
+  "name": "@thetad/cli",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "cli": "tsx src/index.ts"
+  }
+}

@@ -1,0 +1,15 @@
+# dependencies / build
+node_modules/
+dist/
+
+# runtime data — never commit trading state or market data
+# (root-anchored: /data must not swallow packages/data)
+.env
+/state/
+/data/
+/journal/
+*.log
+
+# local tooling
+.claude/
+.DS_Store
