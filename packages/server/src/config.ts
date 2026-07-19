@@ -34,9 +34,7 @@ export function loadConfig(): Config {
     alpaca: {
       keyId: (isLive ? env.ALPACA_LIVE_KEY_ID : env.ALPACA_PAPER_KEY_ID) ?? '',
       secretKey: (isLive ? env.ALPACA_LIVE_SECRET_KEY : env.ALPACA_PAPER_SECRET_KEY) ?? '',
-      tradingBaseUrl: isLive
-        ? 'https://api.alpaca.markets'
-        : 'https://paper-api.alpaca.markets',
+      tradingBaseUrl: isLive ? 'https://api.alpaca.markets' : 'https://paper-api.alpaca.markets',
     },
   });
 }

@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    # Job name is the required status check in branch protection — do not rename
+    # without updating the protection rule.
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Format check
+        run: npm run format:check
+      - name: Typecheck
+        run: npm run check
+      - name: Test
+        run: npm test
+      - name: Build web UI
+        run: npm run build:web

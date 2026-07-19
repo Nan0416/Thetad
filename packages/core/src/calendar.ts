@@ -56,7 +56,10 @@ export class MarketCalendar {
   }
 
   private assertCovered(dateIso: string): void {
-    if (dateIso.slice(0, 4) < this.minDate.slice(0, 4) || dateIso.slice(0, 4) > this.maxDate.slice(0, 4)) {
+    if (
+      dateIso.slice(0, 4) < this.minDate.slice(0, 4) ||
+      dateIso.slice(0, 4) > this.maxDate.slice(0, 4)
+    ) {
       throw new Error(`date ${dateIso} outside calendar coverage ${this.minDate}..${this.maxDate}`);
     }
   }

@@ -18,8 +18,20 @@ function makePosition(overrides: Partial<Position> = {}): Position {
     underlying: 'XYZ',
     shares: 100,
     legs: [
-      { occSymbol: CALL, qty: -1, right: 'C', strikeCents: cents(11_000), expirationIso: '2026-09-18' },
-      { occSymbol: PUT, qty: -1, right: 'P', strikeCents: cents(9_000), expirationIso: '2026-09-18' },
+      {
+        occSymbol: CALL,
+        qty: -1,
+        right: 'C',
+        strikeCents: cents(11_000),
+        expirationIso: '2026-09-18',
+      },
+      {
+        occSymbol: PUT,
+        qty: -1,
+        right: 'P',
+        strikeCents: cents(9_000),
+        expirationIso: '2026-09-18',
+      },
     ],
     entryCreditCents: cents(40_000), // $4.00/share x 100 x 2 legs' worth of premium
     rollCount: 0,

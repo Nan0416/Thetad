@@ -9,6 +9,7 @@ Architecture and rationale live in [docs/DESIGN.md](docs/DESIGN.md).
 ```sh
 npm test                 # vitest, all packages
 npm run check            # tsc --noEmit, all packages + web
+npm run format           # prettier --write (CI enforces format:check)
 npm start                # daemon on http://127.0.0.1:7777
 npm run dev:server       # daemon with watch
 npm run dev:web          # Vite dev server (proxies /api to daemon)

@@ -15,13 +15,7 @@ export interface BrokerPosition {
 
 export type OrderSide = 'buy' | 'sell';
 export type OrderStatus =
-  | 'accepted'
-  | 'new'
-  | 'partially_filled'
-  | 'filled'
-  | 'canceled'
-  | 'rejected'
-  | 'expired';
+  'accepted' | 'new' | 'partially_filled' | 'filled' | 'canceled' | 'rejected' | 'expired';
 
 export interface OrderLeg {
   readonly symbol: string;
