@@ -23,6 +23,7 @@
     "backtest": "tsx packages/scripts/src/run-backtest.ts",
     "fetch:contracts": "tsx packages/scripts/src/fetch-contracts.ts",
     "fetch:bars": "tsx packages/scripts/src/fetch-minute-bars.ts",
+    "fetch:option-bars": "tsx packages/scripts/src/fetch-option-minute-bars.ts",
     "dev:server": "tsx watch packages/server/src/index.ts",
     "dev:web": "npm run dev --workspace @thetad/web",
     "build:web": "npm run build --workspace @thetad/web",
