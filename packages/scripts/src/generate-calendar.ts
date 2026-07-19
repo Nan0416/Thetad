@@ -1,5 +1,5 @@
 /**
- * Generate packages/core/src/data/nyse-calendar.json from NYSE holiday rules,
+ * Generate packages/engine/core/src/data/nyse-calendar.json from NYSE holiday rules,
  * 2016-2027. Output shape matches Alpaca's GET /v2/calendar so that
  * scripts/fetch-calendar.ts can overwrite this file with broker-authoritative
  * data without any consumer changes.
@@ -128,6 +128,6 @@ for (let y = START_YEAR; y <= END_YEAR; y++) {
   }
 }
 
-const out = new URL('../packages/core/src/data/nyse-calendar.json', import.meta.url);
+const out = new URL('../../engine/core/src/data/nyse-calendar.json', import.meta.url);
 writeFileSync(out, `[\n${days.map((d) => JSON.stringify(d)).join(',\n')}\n]\n`);
 console.log(`wrote ${days.length} trading days (${START_YEAR}-${END_YEAR}) to ${out.pathname}`);

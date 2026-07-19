@@ -1,5 +1,5 @@
 /**
- * Overwrite packages/core/src/data/nyse-calendar.json with broker-authoritative
+ * Overwrite packages/engine/core/src/data/nyse-calendar.json with broker-authoritative
  * data from Alpaca's GET /v2/calendar (needs valid keys in .env). Same output
  * shape as scripts/generate-calendar.ts — consumers never notice the swap.
  *
@@ -30,6 +30,6 @@ if (!response.ok) {
 const raw = (await response.json()) as { date: string; open: string; close: string }[];
 const days = raw.map(({ date, open, close }) => ({ date, open, close }));
 
-const out = new URL('../packages/core/src/data/nyse-calendar.json', import.meta.url);
+const out = new URL('../../engine/core/src/data/nyse-calendar.json', import.meta.url);
 writeFileSync(out, `[\n${days.map((d) => JSON.stringify(d)).join(',\n')}\n]\n`);
 console.log(`wrote ${days.length} trading days from Alpaca to ${out.pathname}`);
