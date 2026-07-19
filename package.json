@@ -22,6 +22,7 @@
     "verify:alpaca": "tsx packages/scripts/src/verify-alpaca.ts",
     "backtest": "tsx packages/scripts/src/run-backtest.ts",
     "contracts:fetch": "tsx packages/scripts/src/fetch-contracts.ts",
+    "bars:fetch": "tsx packages/scripts/src/fetch-minute-bars.ts",
     "dev:server": "tsx watch packages/server/src/index.ts",
     "dev:web": "npm run dev --workspace @thetad/web",
     "build:web": "npm run build --workspace @thetad/web",

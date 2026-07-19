@@ -13,6 +13,7 @@ npm run format           # prettier --write (CI enforces format:check)
 npm run test:integ       # integration tests vs Alpaca paper API (needs keys in .env)
 npm run backtest         # SPY short-put backtest vs Alpaca history (see --help in script)
 npm run contracts:fetch  # preload option contract catalog: -- SPY 2025 [--force]
+npm run bars:fetch       # preload 1-minute stock bars: -- SPY 2025 [--force]
 npm start                # daemon on http://127.0.0.1:7777
 npm run dev:server       # daemon with watch
 npm run dev:web          # Vite dev server (proxies /api to daemon)
