@@ -14,6 +14,7 @@ const OPTIONS_DATA_FLOOR_ISO = '2024-02-01';
 export interface ContractMinuteBars {
   readonly v: 1;
   readonly occSymbol: string;
+  readonly fetchedAtUtc: string;
   /** Data is complete once fetched through the contract's expiration. */
   readonly fetchedThroughIso: string;
   readonly bars: readonly MinuteBarTuple[];
@@ -51,6 +52,7 @@ const barsResponseSchema = z.object({
 const contractFileSchema = z.object({
   v: z.literal(1),
   occSymbol: z.string(),
+  fetchedAtUtc: z.string(),
   fetchedThroughIso: z.string(),
   bars: z.array(z.tuple([z.string(), z.number(), z.number(), z.number(), z.number(), z.number()])),
 });
@@ -124,6 +126,7 @@ export class AlpacaOptionMinuteBarStore implements OptionMinuteBarStore {
     return {
       v: 1,
       occSymbol,
+      fetchedAtUtc: new Date().toISOString(),
       fetchedThroughIso: expirationIso <= todayIso ? expirationIso : todayIso,
       bars,
     };
