@@ -6,3 +6,4 @@ export * from './metrics';
 export * from './runner';
 export * from './alpaca-historical';
 export * from './contract-catalog';
+export * from './minute-bar-store';

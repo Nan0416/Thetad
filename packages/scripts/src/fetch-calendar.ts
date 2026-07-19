@@ -3,7 +3,7 @@
  * data from Alpaca's GET /v2/calendar (needs valid keys in .env). Same output
  * shape as scripts/generate-calendar.ts — consumers never notice the swap.
  *
- * Run: npm run calendar:fetch
+ * Run: npm run fetch:calendar
  */
 import { writeFileSync } from 'node:fs';
 

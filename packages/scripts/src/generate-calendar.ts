@@ -4,7 +4,7 @@
  * scripts/fetch-calendar.ts can overwrite this file with broker-authoritative
  * data without any consumer changes.
  *
- * Run: npm run calendar:generate
+ * Run: npm run generate:calendar
  */
 import { writeFileSync } from 'node:fs';
 

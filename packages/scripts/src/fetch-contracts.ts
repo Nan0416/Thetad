@@ -4,7 +4,7 @@
  * backtester reads (and populates on demand if missing). Preloading just
  * front-runs that fetch.
  *
- * Usage: npm run contracts:fetch -- SPY 2025 [--force]
+ * Usage: npm run fetch:contracts -- SPY 2025 [--force]
  */
 import { AlpacaContractCatalog, AlpacaHttp } from '@thetad/engine';
 
@@ -21,7 +21,7 @@ const underlying = positional[0];
 const year = Number(positional[1]);
 const force = process.argv.includes('--force');
 if (!underlying || !Number.isInteger(year)) {
-  console.error('usage: npm run contracts:fetch -- <SYMBOL> <year> [--force]');
+  console.error('usage: npm run fetch:contracts -- <SYMBOL> <year> [--force]');
   process.exit(2);
 }
 
