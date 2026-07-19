@@ -144,7 +144,24 @@ trade). Backtests run as child processes so they cannot block the live loop.
 - Every file carries a schema `v` field; zod-validate on load; migrations are
   zod transforms.
 
-### 4.4 Safety rails
+### 4.4 Market sessions and option hours
+
+The bundled calendar holds equity sessions (09:30-16:00 ET, 13:00 half days).
+Options add three static rules, encoded in code rather than data:
+
+- Standard equity options trade RTH only — no pre/post market. Overnight gap
+  risk is therefore unhedgeable; sizing is the only defense.
+- SPY/QQQ/IWM/DIA options trade until 16:15 ET (expiring series stop at
+  16:00 on expiration day), but Alpaca only accepts options orders in RTH —
+  so the engine (a) makes all option decisions inside 09:30-16:00, and
+  (b) treats post-16:00 option marks as stale for triggers: quotes move in
+  16:00-16:15 while we cannot act, and a "stop" firing then is a false alarm.
+- Expiration mechanics: OCC auto-exercises anything >= $0.01 ITM off the
+  16:00 underlying close; exercise cutoff ~17:30 ET. The 21-DTE exit means we
+  never intentionally reach expiration; assignment handling still encodes
+  these times as defense in depth.
+
+### 4.5 Safety rails
 
 Port binding doubles as the single-daemon guard (EADDRINUSE → refuse to run a
 second engine). Every order carries a `client_order_id` idempotency key.
