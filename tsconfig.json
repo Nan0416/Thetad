@@ -4,5 +4,5 @@
     "types": ["node"],
     "lib": ["ES2022"]
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts"]
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "packages/*/integ/**/*.ts"]
 }
