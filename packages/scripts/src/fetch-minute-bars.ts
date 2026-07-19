@@ -5,7 +5,7 @@
  * fetch. Bars include extended hours as served by Alpaca (SIP feed,
  * split-adjusted); filter by session via MarketCalendar when consuming.
  *
- * Usage: npm run bars:fetch -- SPY 2025 [--force]
+ * Usage: npm run fetch:bars -- SPY 2025 [--force]
  */
 import { AlpacaHttp, AlpacaMinuteBarStore } from '@thetad/engine';
 
@@ -22,7 +22,7 @@ const symbol = positional[0];
 const year = Number(positional[1]);
 const force = process.argv.includes('--force');
 if (!symbol || !Number.isInteger(year)) {
-  console.error('usage: npm run bars:fetch -- <SYMBOL> <year> [--force]');
+  console.error('usage: npm run fetch:bars -- <SYMBOL> <year> [--force]');
   process.exit(2);
 }
 

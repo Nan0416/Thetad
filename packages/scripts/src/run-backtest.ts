@@ -55,7 +55,7 @@ const params: ShortPutParams = {
 const http = new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' });
 const dataSource = new AlpacaHistoricalData(http, './data/backtest-cache');
 // Contract listings come from the trading API; the catalog shares its cache
-// with `npm run contracts:fetch` and fetches missing years on demand.
+// with `npm run fetch:contracts` and fetches missing years on demand.
 const tradingHttp = new AlpacaHttp({
   keyId,
   secretKey,

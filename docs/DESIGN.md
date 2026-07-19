@@ -179,7 +179,7 @@ and halts.
 | Push          | SSE, not websockets                                        | one-directional needs; plain HTTP; auto-reconnect                                                               |
 | Broker client | thin owned HTTP client + zod, no SDK                       | Alpaca's JS SDKs lag (esp. options/mleg); we own retries, rate limits, idempotency; ~15 endpoints               |
 | CLI           | pure client of the daemon's HTTP API                       | one writer (daemon), many readers; same API the cloud version would expose                                      |
-| Calendar      | bundled JSON (2016-2027), no runtime queries               | generated from NYSE rules (`calendar:generate`), overwritable with broker-authoritative data (`calendar:fetch`) |
+| Calendar      | bundled JSON (2016-2027), no runtime queries               | generated from NYSE rules (`generate:calendar`), overwritable with broker-authoritative data (`fetch:calendar`) |
 | Concurrency   | single-threaded; backtests as child processes              | the loop is IO-bound; simplicity wins until sweeps demand workers                                               |
 
 ## 6. Coding conventions
