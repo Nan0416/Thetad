@@ -1,4 +1,4 @@
-import { cents } from '@thetad/core';
+import { cents } from '../../core/index';
 import type {
   Broker,
   CancelOrderRequest,

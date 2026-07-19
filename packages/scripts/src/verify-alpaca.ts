@@ -6,9 +6,9 @@
  *
  * Run: npm run verify:alpaca  |  npm run verify:alpaca -- --orders
  */
-import { cents } from '@thetad/core';
-import { AlpacaHttp, AlpacaMarketData } from '@thetad/data';
-import { AlpacaBroker } from '@thetad/broker';
+import { cents } from '@thetad/engine';
+import { AlpacaHttp, AlpacaMarketData } from '@thetad/engine';
+import { AlpacaBroker } from '@thetad/engine';
 
 process.loadEnvFile('.env');
 const keyId = process.env.ALPACA_PAPER_KEY_ID ?? '';

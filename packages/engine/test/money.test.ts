@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCents, cents, formatUsd, fromUsd, mulCents, pctOfCents } from '../src/money';
+import { addCents, cents, formatUsd, fromUsd, mulCents, pctOfCents } from '../src/core/money';
 
 describe('money', () => {
   it('rejects non-integer amounts', () => {

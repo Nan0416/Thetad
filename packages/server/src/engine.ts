@@ -1,4 +1,4 @@
-import { appendJsonl } from '@thetad/data';
+import { appendJsonl } from '@thetad/engine';
 import { join } from 'node:path';
 import type { Config } from './config';
 
