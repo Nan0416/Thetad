@@ -123,6 +123,32 @@ describe('runShortPutBacktest (synthetic world)', () => {
     expect(stopped[0]!.exitDateIso).toBe('2026-03-16');
   });
 
+  it('selects strikes from the contract catalog when one is provided', async () => {
+    // A market that only lists half-dollar strikes ($x.50): a synthesized
+    // grid can never produce one, so every entry proves catalog sourcing.
+    const halfDollarCatalog = {
+      async getYear() {
+        throw new Error('unused');
+      },
+      async strikesCentsFor() {
+        const strikes: Cents[] = [];
+        for (let dollars = 400; dollars <= 520; dollars++) strikes.push(cents(dollars * 100 + 50));
+        return strikes;
+      },
+    };
+    const world = new SyntheticDataSource(flatSpotWorld(cents(50_000)), 0.2, baseParams.rate);
+    const result = await runShortPutBacktest(
+      baseParams,
+      world,
+      calendar,
+      halfDollarCatalog as never,
+    );
+    expect(result.trades.length).toBeGreaterThanOrEqual(1);
+    for (const trade of result.trades) {
+      expect(trade.strikeCents % 100).toBe(50);
+    }
+  });
+
   it('respects the IV rank filter', async () => {
     // Vol regime: high during warm-up, low for the whole trading window --
     // today's IV always sits at the bottom of its trailing range, rank ~0.

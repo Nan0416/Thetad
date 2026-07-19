@@ -8,6 +8,7 @@
  * Results print to stdout; the trade log also lands in data/backtests/.
  */
 import {
+  AlpacaContractCatalog,
   AlpacaHistoricalData,
   AlpacaHttp,
   MarketCalendar,
@@ -53,6 +54,14 @@ const params: ShortPutParams = {
 
 const http = new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' });
 const dataSource = new AlpacaHistoricalData(http, './data/backtest-cache');
+// Contract listings come from the trading API; the catalog shares its cache
+// with `npm run contracts:fetch` and fetches missing years on demand.
+const tradingHttp = new AlpacaHttp({
+  keyId,
+  secretKey,
+  baseUrl: 'https://paper-api.alpaca.markets',
+});
+const catalog = new AlpacaContractCatalog(tradingHttp, './data/options');
 
 console.log(`SPY short put ${params.startIso}..${params.endIso}`);
 console.log(
@@ -63,7 +72,7 @@ console.log(
 );
 console.log('');
 
-const result = await runShortPutBacktest(params, dataSource, MarketCalendar.nyse());
+const result = await runShortPutBacktest(params, dataSource, MarketCalendar.nyse(), catalog);
 console.log(formatReport(result.metrics, result.trades));
 
 const outPath = `./data/backtests/spy-short-put-${params.startIso}-${params.endIso}.jsonl`;
