@@ -2,6 +2,7 @@ import { impliedVol } from '../core/black-scholes';
 import type { MarketCalendar } from '../core/calendar';
 import { cents, toUsd, type Cents } from '../core/money';
 import { OccSymbol } from '../core/occ';
+import { nearestStrikeCents, type ContractCatalog } from './contract-catalog';
 import type { HistoricalDataSource } from './historical-data';
 import { addDaysIso, pickExpiration } from './strategy';
 import type { ShortPutParams } from './types';
@@ -20,6 +21,7 @@ export async function buildAtmIvSeries(
   dataSource: HistoricalDataSource,
   calendar: MarketCalendar,
   params: ShortPutParams,
+  catalog?: ContractCatalog,
 ): Promise<ReadonlyMap<string, number>> {
   const contractByDate = new Map<string, { occ: string; strikeCents: Cents; expIso: string }>();
   const occSymbols = new Set<string>();
@@ -33,7 +35,12 @@ export async function buildAtmIvSeries(
       ATM_TARGET_DTE + ATM_DTE_WINDOW,
     );
     if (!expIso) continue;
-    const strikeCents = cents(Math.round(spot / 100) * 100);
+    // Prefer the nearest *listed* strike; fall back to the synthesized
+    // rounded-dollar guess when no catalog is provided (synthetic tests).
+    const listed = catalog
+      ? nearestStrikeCents(await catalog.strikesCentsFor(params.underlying, expIso, 'P'), spot)
+      : null;
+    const strikeCents = listed ?? cents(Math.round(spot / 100) * 100);
     const occ = new OccSymbol(params.underlying, expIso, 'P', strikeCents).toString();
     contractByDate.set(dateIso, { occ, strikeCents, expIso });
     occSymbols.add(occ);

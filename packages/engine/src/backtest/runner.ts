@@ -2,6 +2,7 @@ import type { MarketCalendar } from '../core/calendar';
 import { nyWallToUtc } from '../core/calendar';
 import { cents, type Cents } from '../core/money';
 import { OccSymbol } from '../core/occ';
+import type { ContractCatalog } from './contract-catalog';
 import type { HistoricalDataSource } from './historical-data';
 import { buildAtmIvSeries, ivRankOn } from './iv-rank';
 import { computeMetrics } from './metrics';
@@ -33,6 +34,7 @@ export async function runShortPutBacktest(
   params: ShortPutParams,
   dataSource: HistoricalDataSource,
   calendar: MarketCalendar,
+  catalog?: ContractCatalog,
 ): Promise<BacktestResult> {
   // Warm-up: extra trading days of history so IV Rank has a window at start.
   const warmupDays = calendar.lastTradingDays(params.startIso, params.ivRankLookbackDays + 10);
@@ -45,8 +47,14 @@ export async function runShortPutBacktest(
     warmupStartIso,
     params.endIso,
   );
-  const ivSeries = await buildAtmIvSeries(allDates, spotByDate, dataSource, calendar, params);
-
+  const ivSeries = await buildAtmIvSeries(
+    allDates,
+    spotByDate,
+    dataSource,
+    calendar,
+    params,
+    catalog,
+  );
   const trades: ClosedTrade[] = [];
   const equityCurve: EquityPoint[] = [];
   let open: OpenShortPut | null = null;
@@ -114,7 +122,16 @@ export async function runShortPutBacktest(
       if (ivRank === null || ivRank < params.minIvRank) {
         blockedDays++;
       } else {
-        const entered = await tryEnter(dateIso, spot, ivRank, params, dataSource, calendar, dteOn);
+        const entered = await tryEnter(
+          dateIso,
+          spot,
+          ivRank,
+          params,
+          dataSource,
+          calendar,
+          dteOn,
+          catalog,
+        );
         if (entered) {
           open = entered.position;
           openMarks = entered.marks;
@@ -151,12 +168,21 @@ async function tryEnter(
   dataSource: HistoricalDataSource,
   calendar: MarketCalendar,
   dteOn: (dateIso: string, expirationIso: string) => number,
+  catalog?: ContractCatalog,
 ): Promise<{ position: OpenShortPut; marks: ReadonlyMap<string, Cents> } | null> {
   const expirationIso = pickExpiration(dateIso, calendar, params.dteMin, params.dteMax);
   if (!expirationIso) return null;
 
+  // Strike menu: real listed strikes from the catalog when available,
+  // synthesized $1 grid otherwise (synthetic tests, missing expirations).
+  let grid = strikeGrid(spot, 0.86, 1.0);
+  if (catalog) {
+    const listed = await catalog.strikesCentsFor(params.underlying, expirationIso, 'P');
+    const inBand = listed?.filter((k) => k >= spot * 0.86 && k <= spot) ?? [];
+    if (inBand.length > 0) grid = [...inBand];
+  }
+
   // One fetch covers the entry-day strip AND the daily marks through expiry.
-  const grid = strikeGrid(spot, 0.86, 1.0);
   const symbols = grid.map((k) =>
     new OccSymbol(params.underlying, expirationIso, 'P', k).toString(),
   );
