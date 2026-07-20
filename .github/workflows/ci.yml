@@ -50,4 +50,5 @@ jobs:
         env:
           ALPACA_PAPER_KEY_ID: ${{ secrets.ALPACA_PAPER_KEY_ID }}
           ALPACA_PAPER_SECRET_KEY: ${{ secrets.ALPACA_PAPER_SECRET_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: npm run test:integ

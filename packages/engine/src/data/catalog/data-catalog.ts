@@ -4,6 +4,7 @@ import { fromUsd, type Cents } from '../../core/money';
 import { OccSymbol, type OptionRight } from '../../core/occ';
 import type { Bar } from '../../core/types';
 import type { AlpacaBar, AlpacaDataProvider } from '../providers/alpaca/data-provider';
+import type { FredDataProvider } from '../providers/fred/data-provider';
 import { TieredCache } from './tiered-cache';
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,24 @@ export interface ContractMinuteBars {
   /** Data is complete once fetched through the contract's expiration. */
   readonly fetchedThroughIso: string;
   readonly bars: readonly MinuteBarTuple[];
+}
+
+/**
+ * FRED series thetad consumes. Extend deliberately — verify id, frequency,
+ * and units via /fred/series before adding (mnemonics are not a spec).
+ */
+export type FredSeriesId =
+  | 'DGS1MO' // Market Yield on U.S. Treasury at 1-Month Constant Maturity, daily, percent
+  | 'VIXCLS'; // CBOE Volatility Index (VIX) close, daily, index level
+
+/** One year of a daily FRED series. */
+export interface FredDailySeries {
+  readonly v: 1;
+  readonly seriesId: string;
+  readonly year: number;
+  readonly fetchedAtUtc: string;
+  /** [dateIso, value] — value null where FRED reports missing ("."). */
+  readonly observations: readonly (readonly [string, number | null])[];
 }
 
 /** The slice of the catalog the backtester's strike selection consumes. */
@@ -99,12 +118,21 @@ const contractMinuteBarsSchema = z.object({
   bars: z.array(minuteBarTupleSchema),
 });
 
+const fredDailySeriesSchema = z.object({
+  v: z.literal(1),
+  seriesId: z.string(),
+  year: z.number(),
+  fetchedAtUtc: z.string(),
+  observations: z.array(z.tuple([z.string(), z.number().nullable()])),
+});
+
 // ---------------------------------------------------------------------------
 // The catalog
 // ---------------------------------------------------------------------------
 
 export interface DataCatalogOptions {
   readonly provider: AlpacaDataProvider;
+  readonly fredProvider: FredDataProvider;
   /** Root of the local cache tree (default ./data). */
   readonly rootDir?: string;
 }
@@ -126,11 +154,45 @@ export interface DataCatalogOptions {
 export class DataCatalog implements ContractCatalog {
   private readonly cache = new TieredCache();
   private readonly provider: AlpacaDataProvider;
+  private readonly fredProvider: FredDataProvider;
   private readonly rootDir: string;
 
   constructor(options: DataCatalogOptions) {
     this.provider = options.provider;
+    this.fredProvider = options.fredProvider;
     this.rootDir = options.rootDir ?? './data';
+  }
+
+  // -- reference series (FRED) ----------------------------------------------
+
+  async getFredDailySeries(
+    seriesId: FredSeriesId,
+    year: number,
+    forceRefresh = false,
+  ): Promise<FredDailySeries> {
+    return this.cache.get(
+      {
+        path: join(this.rootDir, 'reference', `fred-series-${seriesId}-${year}.json`),
+        schema: fredDailySeriesSchema as z.ZodType<FredDailySeries>,
+        fetch: async () => {
+          const { observations } = await this.fredProvider.getSeriesObservations({
+            seriesId,
+            observationStart: `${year}-01-01`,
+            observationEnd: `${year}-12-31`,
+          });
+          return {
+            v: 1 as const,
+            seriesId,
+            year,
+            fetchedAtUtc: new Date().toISOString(),
+            observations: observations.map(
+              (o) => [o.date, o.value === '.' ? null : Number(o.value)] as const,
+            ),
+          };
+        },
+      },
+      forceRefresh,
+    );
   }
 
   // -- contracts ------------------------------------------------------------

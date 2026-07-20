@@ -7,11 +7,12 @@
  *
  * Usage: npm run fetch:bars -- SPY 2025 [--force]
  */
-import { AlpacaDataProvider, AlpacaHttp, DataCatalog } from '@thetad/engine';
+import { AlpacaDataProvider, AlpacaHttp, DataCatalog, FredDataProvider } from '@thetad/engine';
 
 process.loadEnvFile('.env');
 const keyId = process.env.ALPACA_PAPER_KEY_ID ?? '';
 const secretKey = process.env.ALPACA_PAPER_SECRET_KEY ?? '';
+const fredApiKey = process.env.FRED_API_KEY ?? '';
 if (!keyId || !secretKey) {
   console.error('missing ALPACA_PAPER_KEY_ID / ALPACA_PAPER_SECRET_KEY in .env');
   process.exit(1);
@@ -31,6 +32,7 @@ const catalog = new DataCatalog({
     dataHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' }),
     tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
   }),
+  fredProvider: new FredDataProvider({ apiKey: fredApiKey }),
 });
 
 const snapshot = await catalog.getStockMinuteBarsRaw(symbol, year, force);

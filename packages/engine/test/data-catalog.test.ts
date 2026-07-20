@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DataCatalog, nearestStrikeCents } from '../src/data/catalog/data-catalog';
 import { AlpacaDataProvider } from '../src/data/providers/alpaca/data-provider';
+import { FredDataProvider } from '../src/data/providers/fred/data-provider';
 import { AlpacaHttp } from '../src/data/providers/alpaca/http';
 import { cents } from '../src/core/money';
 
@@ -79,7 +80,8 @@ function makeCatalog(dir: string, counter: { calls: number }): DataCatalog {
     fetchFn: makeFakeFetch(counter),
   });
   const provider = new AlpacaDataProvider({ dataHttp: http, tradingHttp: http });
-  return new DataCatalog({ provider, rootDir: dir });
+  const fredProvider = new FredDataProvider({ apiKey: 'test', fetchFn: makeFakeFetch(counter) });
+  return new DataCatalog({ provider, fredProvider, rootDir: dir });
 }
 
 describe('DataCatalog: contracts', () => {
