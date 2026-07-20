@@ -39,6 +39,9 @@ export interface FredDataProviderOptions {
 
 export interface GetReleaseDatesRequest {
   readonly releaseId: number;
+  /** Bound the returned dates (FRED realtime period), e.g. one year. */
+  readonly realtimeStart?: string;
+  readonly realtimeEnd?: string;
 }
 export interface GetReleaseDatesResponse {
   /** Ascending; includes scheduled future dates (release_dates_with_no_data). */
@@ -67,13 +70,16 @@ export class FredDataProvider {
     const dates: string[] = [];
     const limit = 10_000;
     for (let offset = 0; ; offset += limit) {
-      const page = await this.request(releaseDatesResponseSchema, '/fred/release/dates', {
+      const query: Record<string, string> = {
         release_id: String(request.releaseId),
         include_release_dates_with_no_data: 'true',
         sort_order: 'asc',
         limit: String(limit),
         offset: String(offset),
-      });
+      };
+      if (request.realtimeStart) query.realtime_start = request.realtimeStart;
+      if (request.realtimeEnd) query.realtime_end = request.realtimeEnd;
+      const page = await this.request(releaseDatesResponseSchema, '/fred/release/dates', query);
       const batch = page.release_dates ?? [];
       dates.push(...batch.map((d) => d.date));
       if (batch.length < limit) break;

@@ -7,7 +7,13 @@
  *
  * Usage: npm run fetch:reference [-- --force]
  */
-import { AlpacaDataProvider, AlpacaHttp, DataCatalog, FredDataProvider } from '@thetad/engine';
+import {
+  AlpacaDataProvider,
+  AlpacaHttp,
+  DataCatalog,
+  FredDataProvider,
+  MacroCalendar,
+} from '@thetad/engine';
 
 process.loadEnvFile('.env');
 const keyId = process.env.ALPACA_PAPER_KEY_ID ?? '';
@@ -19,15 +25,19 @@ if (!fredApiKey) {
 }
 
 const force = process.argv.includes('--force');
+const fredProvider = new FredDataProvider({ apiKey: fredApiKey });
+const macroCalendar = new MacroCalendar({ fredProvider });
+const currentYear = new Date().getUTCFullYear();
 const catalog = new DataCatalog({
   provider: new AlpacaDataProvider({
     dataHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' }),
     tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
   }),
-  fredProvider: new FredDataProvider({ apiKey: fredApiKey }),
+  fredProvider,
 });
 
-const events = await catalog.getMacroEvents(force);
+// Current-year release files auto-refresh after 24h; --force is only for series.
+const events = await macroCalendar.getMacroEvents(2024, currentYear);
 const todayIso = new Date().toISOString().slice(0, 10);
 const upcoming = events.filter((e) => e.dateIso >= todayIso);
 const byKind = new Map<string, number>();
@@ -42,7 +52,6 @@ console.log(
     .join(', ')} ...`,
 );
 
-const currentYear = new Date().getUTCFullYear();
 const years = Array.from({ length: currentYear - 2024 + 1 }, (_, i) => 2024 + i);
 for (const seriesId of ['DGS1MO', 'VIXCLS'] as const) {
   let total = 0;

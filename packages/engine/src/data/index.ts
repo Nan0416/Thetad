@@ -5,3 +5,4 @@ export * from './providers/alpaca/data-provider';
 export * from './providers/fred/data-provider';
 export * from './catalog/tiered-cache';
 export * from './catalog/data-catalog';
+export * from './catalog/macro-calendar';
