@@ -22,10 +22,48 @@ describe('black-scholes', () => {
     expect(bsPrice({ ...base, spot: 110, tYears: 0, right: 'C' })).toBe(10);
   });
 
+  it('rejects invalid model inputs', () => {
+    expect(() => bsPrice({ ...base, vol: 0, right: 'C' })).toThrow(RangeError);
+    expect(() => bsPrice({ ...base, spot: 0, right: 'C' })).toThrow(RangeError);
+    expect(() => bsGreeks({ ...base, strike: -1, right: 'P' })).toThrow(RangeError);
+    expect(() => bsPrice({ ...base, tYears: -1, right: 'C' })).toThrow(RangeError);
+  });
+
   it('recovers vol from price (IV round-trip)', () => {
     const price = bsPrice({ ...base, right: 'C' });
     const { vol: _drop, ...rest } = base;
-    expect(impliedVol(price, { ...rest, right: 'C' })).toBeCloseTo(0.2, 4);
+    const input = { ...rest, right: 'C' as const };
+    const iv = impliedVol(price, input);
+    expect(iv).toBeCloseTo(0.2, 4);
+    if (iv === null) throw new Error('expected a positive implied volatility');
+    expect(() => bsGreeks({ ...input, vol: iv })).not.toThrow();
+  });
+
+  it('solves IV outside the former fixed range', () => {
+    const highVol = { ...base, vol: 6, right: 'C' as const };
+    const { vol: _drop, ...rest } = highVol;
+    expect(impliedVol(bsPrice(highVol), rest)).toBeCloseTo(6, 4);
+  });
+
+  it('returns null at the zero-volatility lower bound', () => {
+    const input = {
+      spot: 100,
+      strike: 90,
+      tYears: 1,
+      rate: 0.05,
+      divYield: 0.02,
+      right: 'C' as const,
+    };
+    const lower =
+      input.spot * Math.exp(-input.divYield * input.tYears) -
+      input.strike * Math.exp(-input.rate * input.tYears);
+    expect(impliedVol(lower, input)).toBeNull();
+  });
+
+  it('returns null for prices outside no-arbitrage bounds', () => {
+    const { vol: _drop, ...input } = base;
+    expect(impliedVol(-1, { ...input, right: 'C' })).toBeNull();
+    expect(impliedVol(input.spot, { ...input, right: 'C' })).toBeNull();
   });
 
   it('satisfies put-call parity with a dividend yield', () => {

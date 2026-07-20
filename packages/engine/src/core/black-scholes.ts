@@ -48,9 +48,20 @@ function d1d2({ spot, strike, vol, tYears, rate, divYield = 0 }: BsInput): [numb
   return [d1, d1 - vol * sqrtT];
 }
 
+function validateInput({ spot, strike, vol, tYears, rate, divYield = 0 }: BsInput): void {
+  if (![spot, strike, vol, tYears, rate, divYield].every(Number.isFinite)) {
+    throw new RangeError('Black-Scholes inputs must be finite');
+  }
+  if (spot <= 0) throw new RangeError('spot must be positive');
+  if (strike <= 0) throw new RangeError('strike must be positive');
+  if (vol <= 0) throw new RangeError('vol must be positive');
+  if (tYears < 0) throw new RangeError('tYears must be non-negative');
+}
+
 export function bsPrice(input: BsInput): number {
+  validateInput(input);
   const { spot, strike, tYears, rate, divYield = 0, right } = input;
-  if (tYears <= 0) {
+  if (tYears === 0) {
     return Math.max(right === 'C' ? spot - strike : strike - spot, 0);
   }
   const [d1, d2] = d1d2(input);
@@ -72,8 +83,9 @@ export interface Greeks {
 }
 
 export function bsGreeks(input: BsInput): Greeks {
+  validateInput(input);
   const { spot, strike, vol, tYears, rate, divYield = 0, right } = input;
-  if (tYears <= 0) {
+  if (tYears === 0) {
     const itm = right === 'C' ? spot > strike : spot < strike;
     return { delta: itm ? (right === 'C' ? 1 : -1) : 0, gamma: 0, thetaPerDay: 0, vegaPerPoint: 0 };
   }
@@ -97,17 +109,40 @@ export function bsGreeks(input: BsInput): Greeks {
   };
 }
 
-/** Bisection IV solver; returns null if the price is outside no-arb bounds. */
+/** Bisection IV solver; returns null if the price has no finite implied volatility. */
 export function impliedVol(
   price: number,
   input: Omit<BsInput, 'vol'>,
   tolerance = 1e-6,
 ): number | null {
-  let lo = 1e-4;
-  let hi = 5;
-  if (price <= bsPrice({ ...input, vol: lo }) || price >= bsPrice({ ...input, vol: hi })) {
-    return null;
+  const { spot, strike, tYears, rate, divYield = 0, right } = input;
+  validateInput({ ...input, vol: 1 });
+  if (!Number.isFinite(price) || price < 0) return null;
+  if (!Number.isFinite(tolerance) || tolerance <= 0) {
+    throw new RangeError('tolerance must be positive and finite');
   }
+
+  if (tYears === 0) return null;
+
+  const discountedSpot = spot * Math.exp(-divYield * tYears);
+  const discountedStrike = strike * Math.exp(-rate * tYears);
+  const lower =
+    right === 'C'
+      ? Math.max(discountedSpot - discountedStrike, 0)
+      : Math.max(discountedStrike - discountedSpot, 0);
+  const upper = right === 'C' ? discountedSpot : discountedStrike;
+  const priceTolerance = 1e-12 * Math.max(1, upper);
+  if (price < lower - priceTolerance || price >= upper) return null;
+  if (Math.abs(price - lower) <= priceTolerance) return null;
+
+  let lo = 0;
+  let hi = 1;
+  while (bsPrice({ ...input, vol: hi }) < price) {
+    hi *= 2;
+    // The approximate CDF may never reach the analytic upper bound exactly.
+    if (!Number.isFinite(hi)) return null;
+  }
+
   for (let i = 0; i < 200 && hi - lo > tolerance; i++) {
     const mid = (lo + hi) / 2;
     if (bsPrice({ ...input, vol: mid }) < price) lo = mid;
