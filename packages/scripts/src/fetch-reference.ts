@@ -42,12 +42,18 @@ console.log(
     .join(', ')} ...`,
 );
 
-for (const seriesId of ['DGS1MO', 'VIXCLS']) {
-  const series = await catalog.getFredDailySeries(seriesId, force);
-  const latest = [...series.observations].reverse().find(([, v]) => v !== null);
+const currentYear = new Date().getUTCFullYear();
+const years = Array.from({ length: currentYear - 2024 + 1 }, (_, i) => 2024 + i);
+for (const seriesId of ['DGS1MO', 'VIXCLS'] as const) {
+  let total = 0;
+  let latest: readonly [string, number | null] | undefined;
+  for (const year of years) {
+    const series = await catalog.getFredDailySeries(seriesId, year, force);
+    total += series.observations.length;
+    latest = [...series.observations].reverse().find(([, v]) => v !== null) ?? latest;
+  }
   console.log(
-    `${seriesId}: ${series.observations.length} observations, ` +
-      `${series.observations[0]?.[0]} .. ${series.observations[series.observations.length - 1]?.[0]}, ` +
+    `${seriesId}: ${total} observations across ${years[0]}-${currentYear}, ` +
       `latest = ${latest?.[1]} (${latest?.[0]})`,
   );
 }

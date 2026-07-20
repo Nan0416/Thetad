@@ -61,10 +61,19 @@ export interface ReleaseDates {
   readonly dates: readonly string[];
 }
 
-/** Daily FRED series, e.g. DGS1MO (risk-free rate) or VIXCLS. */
+/**
+ * FRED series thetad consumes. Extend deliberately — verify id, frequency,
+ * and units via /fred/series before adding (mnemonics are not a spec).
+ */
+export type FredSeriesId =
+  | 'DGS1MO' // Market Yield on U.S. Treasury at 1-Month Constant Maturity, daily, percent
+  | 'VIXCLS'; // CBOE Volatility Index (VIX) close, daily, index level
+
+/** One year of a daily FRED series. */
 export interface FredDailySeries {
   readonly v: 1;
   readonly seriesId: string;
+  readonly year: number;
   readonly fetchedAtUtc: string;
   /** [dateIso, value] — value null where FRED reports missing ("."). */
   readonly observations: readonly (readonly [string, number | null])[];
@@ -142,6 +151,7 @@ const releaseDatesSchema = z.object({
 const fredDailySeriesSchema = z.object({
   v: z.literal(1),
   seriesId: z.string(),
+  year: z.number(),
   fetchedAtUtc: z.string(),
   observations: z.array(z.tuple([z.string(), z.number().nullable()])),
 });
@@ -152,8 +162,7 @@ const fredDailySeriesSchema = z.object({
 
 export interface DataCatalogOptions {
   readonly provider: AlpacaDataProvider;
-  /** Required only for the FRED-backed reference datasets. */
-  readonly fredProvider?: FredDataProvider;
+  readonly fredProvider: FredDataProvider;
   /** Root of the local cache tree (default ./data). */
   readonly rootDir?: string;
 }
@@ -175,20 +184,13 @@ export interface DataCatalogOptions {
 export class DataCatalog implements ContractCatalog {
   private readonly cache = new TieredCache();
   private readonly provider: AlpacaDataProvider;
-  private readonly fredProvider: FredDataProvider | undefined;
+  private readonly fredProvider: FredDataProvider;
   private readonly rootDir: string;
 
   constructor(options: DataCatalogOptions) {
     this.provider = options.provider;
     this.fredProvider = options.fredProvider;
     this.rootDir = options.rootDir ?? './data';
-  }
-
-  private fred(): FredDataProvider {
-    if (!this.fredProvider) {
-      throw new Error('this dataset needs a FredDataProvider (FRED_API_KEY) — none was configured');
-    }
-    return this.fredProvider;
   }
 
   // -- reference data (FRED + bundled FOMC) ---------------------------------
@@ -200,7 +202,7 @@ export class DataCatalog implements ContractCatalog {
         path: join(this.rootDir, 'reference', `release-dates-${release}.json`),
         schema: releaseDatesSchema as z.ZodType<ReleaseDates>,
         fetch: async () => {
-          const { dates } = await this.fred().getReleaseDates({ releaseId });
+          const { dates } = await this.fredProvider.getReleaseDates({ releaseId });
           return {
             v: 1 as const,
             release,
@@ -214,16 +216,25 @@ export class DataCatalog implements ContractCatalog {
     );
   }
 
-  async getFredDailySeries(seriesId: string, forceRefresh = false): Promise<FredDailySeries> {
+  async getFredDailySeries(
+    seriesId: FredSeriesId,
+    year: number,
+    forceRefresh = false,
+  ): Promise<FredDailySeries> {
     return this.cache.get(
       {
-        path: join(this.rootDir, 'reference', `fred-series-${seriesId}.json`),
+        path: join(this.rootDir, 'reference', `fred-series-${seriesId}-${year}.json`),
         schema: fredDailySeriesSchema as z.ZodType<FredDailySeries>,
         fetch: async () => {
-          const { observations } = await this.fred().getSeriesObservations({ seriesId });
+          const { observations } = await this.fredProvider.getSeriesObservations({
+            seriesId,
+            observationStart: `${year}-01-01`,
+            observationEnd: `${year}-12-31`,
+          });
           return {
             v: 1 as const,
             seriesId,
+            year,
             fetchedAtUtc: new Date().toISOString(),
             observations: observations.map(
               (o) => [o.date, o.value === '.' ? null : Number(o.value)] as const,
@@ -242,7 +253,7 @@ export class DataCatalog implements ContractCatalog {
    * sources publish it.
    */
   async getMacroEvents(forceRefresh = false): Promise<readonly MacroEvent[]> {
-    const events: MacroEvent[] = fomcDecisionDays.map((dateIso) => ({
+    const events: MacroEvent[] = fomcDecisionDays.decisionDays.map((dateIso) => ({
       dateIso,
       event: 'FOMC' as const,
       session: 'intraday' as const,

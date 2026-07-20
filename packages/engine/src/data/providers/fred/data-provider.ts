@@ -48,6 +48,7 @@ export interface GetReleaseDatesResponse {
 export interface GetSeriesObservationsRequest {
   readonly seriesId: string;
   readonly observationStart?: string;
+  readonly observationEnd?: string;
 }
 export interface GetSeriesObservationsResponse {
   readonly observations: readonly FredObservation[];
@@ -93,6 +94,7 @@ export class FredDataProvider {
         offset: String(offset),
       };
       if (request.observationStart) query.observation_start = request.observationStart;
+      if (request.observationEnd) query.observation_end = request.observationEnd;
       const page = await this.request(observationsResponseSchema, '/fred/series/observations', query);
       const batch = page.observations ?? [];
       observations.push(...batch);

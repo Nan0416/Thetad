@@ -12,6 +12,7 @@ import {
   AlpacaHistoricalData,
   AlpacaHttp,
   DataCatalog,
+  FredDataProvider,
   MarketCalendar,
   appendJsonl,
   cents,
@@ -62,6 +63,7 @@ const catalog = new DataCatalog({
     dataHttp: http,
     tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
   }),
+  fredProvider: new FredDataProvider({ apiKey: process.env.FRED_API_KEY ?? '' }),
 });
 
 console.log(`SPY short put ${params.startIso}..${params.endIso}`);

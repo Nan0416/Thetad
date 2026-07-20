@@ -8,11 +8,18 @@
  *   npm run fetch:option-bars -- --from-trades data/backtests/<run>.jsonl
  *   npm run fetch:option-bars -- SPY240719P00520000 [more symbols...]
  */
-import { AlpacaDataProvider, AlpacaHttp, DataCatalog, readJsonl } from '@thetad/engine';
+import {
+  AlpacaDataProvider,
+  AlpacaHttp,
+  DataCatalog,
+  FredDataProvider,
+  readJsonl,
+} from '@thetad/engine';
 
 process.loadEnvFile('.env');
 const keyId = process.env.ALPACA_PAPER_KEY_ID ?? '';
 const secretKey = process.env.ALPACA_PAPER_SECRET_KEY ?? '';
+const fredApiKey = process.env.FRED_API_KEY ?? '';
 if (!keyId || !secretKey) {
   console.error('missing ALPACA_PAPER_KEY_ID / ALPACA_PAPER_SECRET_KEY in .env');
   process.exit(1);
@@ -46,6 +53,7 @@ const catalog = new DataCatalog({
     dataHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://data.alpaca.markets' }),
     tradingHttp: new AlpacaHttp({ keyId, secretKey, baseUrl: 'https://paper-api.alpaca.markets' }),
   }),
+  fredProvider: new FredDataProvider({ apiKey: fredApiKey }),
 });
 
 let totalBars = 0;

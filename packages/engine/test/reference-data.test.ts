@@ -63,7 +63,7 @@ describe('DataCatalog: FRED reference data', () => {
 
   it('converts FRED "." to null in daily series', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'thetad-ref-'));
-    const series = await makeCatalog(dir, { calls: 0 }).getFredDailySeries('DGS1MO');
+    const series = await makeCatalog(dir, { calls: 0 }).getFredDailySeries('DGS1MO', 2026);
     expect(series.observations).toEqual([
       ['2026-07-01', 4.32],
       ['2026-07-04', null],
@@ -87,19 +87,5 @@ describe('DataCatalog: FRED reference data', () => {
     for (let i = 1; i < events.length; i++) {
       expect(events[i]!.dateIso >= events[i - 1]!.dateIso).toBe(true);
     }
-  });
-
-  it('fails loudly when FRED datasets are requested without a provider', async () => {
-    const alpacaHttp = new AlpacaHttp({
-      keyId: 'k',
-      secretKey: 's',
-      baseUrl: 'https://example.test',
-      fetchFn: (async () => new Response('{}', { status: 200 })) as typeof fetch,
-    });
-    const catalog = new DataCatalog({
-      provider: new AlpacaDataProvider({ dataHttp: alpacaHttp, tradingHttp: alpacaHttp }),
-      rootDir: mkdtempSync(join(tmpdir(), 'thetad-ref-')),
-    });
-    await expect(catalog.getReleaseDates('CPI')).rejects.toThrow(/FRED_API_KEY/);
   });
 });
