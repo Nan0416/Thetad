@@ -4,8 +4,10 @@ import fomcDecisionDays from '../../core/data/fomc-decision-days.json';
 import { FRED_RELEASE_IDS, type FredDataProvider } from '../providers/fred/data-provider';
 import { TieredCache } from './tiered-cache';
 
-/** Macro releases tracked for the event calendar (FRED-backed). */
-export type MacroRelease = keyof typeof FRED_RELEASE_IDS;
+/** Macro releases tracked for the event calendar. */
+export type MacroRelease = 'CPI' | 'NFP' | 'PCE';
+
+const MACRO_RELEASES: readonly MacroRelease[] = ['CPI', 'NFP', 'PCE'];
 
 export type MacroEventKind = 'FOMC' | MacroRelease;
 
@@ -19,8 +21,7 @@ export interface MacroEvent {
 /** One year of release dates for one macro release. */
 export interface ReleaseDates {
   readonly v: 1;
-  readonly release: string;
-  readonly releaseId: number;
+  readonly release: MacroRelease;
   readonly year: number;
   readonly fetchedAtUtc: string;
   /** Ascending; the current year includes the scheduled forward calendar. */
@@ -29,8 +30,7 @@ export interface ReleaseDates {
 
 const releaseDatesSchema = z.object({
   v: z.literal(1),
-  release: z.string(),
-  releaseId: z.number(),
+  release: z.enum(['CPI', 'NFP', 'PCE']),
   year: z.number(),
   fetchedAtUtc: z.string(),
   dates: z.array(z.string()),
@@ -72,7 +72,6 @@ export class MacroCalendar {
   }
 
   async getReleaseDates(release: MacroRelease, year: number): Promise<ReleaseDates> {
-    const releaseId = FRED_RELEASE_IDS[release];
     const currentYear = new Date().getUTCFullYear();
     return this.cache.get({
       path: join(this.rootDir, 'reference', `release-dates-${release}-${year}.json`),
@@ -81,15 +80,16 @@ export class MacroCalendar {
         year < currentYear ||
         Date.now() - Date.parse(cached.fetchedAtUtc) < CURRENT_YEAR_MAX_AGE_MS,
       fetch: async () => {
+        // The FRED release id is provider vocabulary — mapped only here,
+        // at the our-model -> provider-model boundary.
         const { dates } = await this.fredProvider.getReleaseDates({
-          releaseId,
+          releaseId: FRED_RELEASE_IDS[release],
           realtimeStart: `${year}-01-01`,
           realtimeEnd: `${year}-12-31`,
         });
         return {
           v: 1 as const,
           release,
-          releaseId,
           year,
           fetchedAtUtc: new Date().toISOString(),
           dates,
@@ -104,7 +104,7 @@ export class MacroCalendar {
       const year = Number(e.dateIso.slice(0, 4));
       return year >= fromYear && year <= toYear;
     });
-    for (const release of Object.keys(FRED_RELEASE_IDS) as MacroRelease[]) {
+    for (const release of MACRO_RELEASES) {
       for (let year = fromYear; year <= toYear; year++) {
         const { dates } = await this.getReleaseDates(release, year);
         events.push(

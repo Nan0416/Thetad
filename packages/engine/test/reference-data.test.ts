@@ -57,6 +57,7 @@ describe('MacroCalendar', () => {
     const dir = mkdtempSync(join(tmpdir(), 'thetad-ref-'));
     const counter = { calls: 0 };
     const first = await makeCalendar(dir, counter).getReleaseDates('CPI', 2024);
+    expect(first.release).toBe('CPI');
     expect(first.dates).toEqual(['2024-06-10', '2024-07-15']);
     const callsAfterFirst = counter.calls;
 
