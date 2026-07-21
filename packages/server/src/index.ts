@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { loadConfig } from './config';
 import { Engine } from './engine';
 import { registerResearchRoutes } from './research';
+import { registerVolatilityRoutes } from './volatility';
 
 const config = loadConfig();
 const engine = new Engine(config);
@@ -33,6 +34,7 @@ app.get('/api/health', async () => ({ ok: true, name: 'thetad', version: '0.0.1'
 app.get('/api/status', async () => engine.status());
 
 registerResearchRoutes(app, catalog);
+registerVolatilityRoutes(app, catalog);
 
 // SSE: the UI's live feed. Streams only ever carry data outward;
 // all actions go through REST, all decisions happen in the engine loop.

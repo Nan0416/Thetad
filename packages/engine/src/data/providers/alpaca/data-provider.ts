@@ -86,6 +86,15 @@ export interface GetOptionMinuteBarsResponse {
   readonly bars: readonly AlpacaBar[];
 }
 
+export interface GetOptionDailyBarsRequest {
+  readonly occSymbol: string;
+  /** Fetch through this date (inclusive); start is Alpaca's data floor. */
+  readonly endIso: string;
+}
+export interface GetOptionDailyBarsResponse {
+  readonly bars: readonly AlpacaBar[];
+}
+
 export class AlpacaDataProvider {
   private readonly dataHttp: AlpacaHttp;
   private readonly tradingHttp: AlpacaHttp;
@@ -167,14 +176,28 @@ export class AlpacaDataProvider {
   async getOptionMinuteBars(
     request: GetOptionMinuteBarsRequest,
   ): Promise<GetOptionMinuteBarsResponse> {
+    return { bars: await this.getOptionBarsPaged(request.occSymbol, request.endIso, '1Min') };
+  }
+
+  async getOptionDailyBars(
+    request: GetOptionDailyBarsRequest,
+  ): Promise<GetOptionDailyBarsResponse> {
+    return { bars: await this.getOptionBarsPaged(request.occSymbol, request.endIso, '1Day') };
+  }
+
+  private async getOptionBarsPaged(
+    occSymbol: string,
+    endIso: string,
+    timeframe: '1Min' | '1Day',
+  ): Promise<readonly AlpacaBar[]> {
     const bars: AlpacaBar[] = [];
     let pageToken: string | undefined;
     do {
       const query: Record<string, string> = {
-        symbols: request.occSymbol,
-        timeframe: '1Min',
+        symbols: occSymbol,
+        timeframe,
         start: OPTIONS_DATA_FLOOR_ISO,
-        end: `${request.endIso}T23:59:59Z`,
+        end: `${endIso}T23:59:59Z`,
         limit: '10000',
       };
       if (pageToken) query.page_token = pageToken;
@@ -184,9 +207,9 @@ export class AlpacaDataProvider {
         '/v1beta1/options/bars',
         { query },
       );
-      bars.push(...(page.bars?.[request.occSymbol] ?? []));
+      bars.push(...(page.bars?.[occSymbol] ?? []));
       pageToken = page.next_page_token ?? undefined;
     } while (pageToken);
-    return { bars };
+    return bars;
   }
 }

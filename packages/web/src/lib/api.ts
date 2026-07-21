@@ -79,6 +79,61 @@ export function fetchOptionBars(
   return getJson(`/api/research/option-bars/${occSymbol}${suffix}`);
 }
 
+/** [dateIso, vol] where vol is annualized, as a decimal (0.18 = 18%). */
+export type VolPoint = readonly [string, number];
+
+export interface VolatilityResponse {
+  readonly symbol: string;
+  readonly fromIso: string;
+  readonly toIso: string;
+  readonly targetDte: number;
+  readonly rvWindows: readonly number[];
+  readonly realized: Readonly<Record<string, readonly VolPoint[]>>;
+  readonly impliedAtm: readonly VolPoint[];
+  readonly vix: readonly VolPoint[];
+}
+
+export interface ContractIvResponse {
+  readonly occSymbol: string;
+  readonly right: OptionRight;
+  readonly strikeCents: number;
+  readonly expirationIso: string;
+  readonly timeframe: Timeframe;
+  /** [tsUtc, iv] over the contract's life within the window. */
+  readonly points: readonly VolPoint[];
+}
+
+export interface VolatilityOptions {
+  /** Constant-maturity target for the ATM IV line, in days. */
+  readonly ivDte?: number;
+  /** Extra realized-vol windows; 30 is always included server-side. */
+  readonly rvWindows?: readonly number[];
+}
+
+export function fetchVolatility(
+  symbol: string,
+  fromIso: string,
+  toIso: string,
+  options: VolatilityOptions = {},
+): Promise<VolatilityResponse> {
+  const query = new URLSearchParams({ symbol, fromIso, toIso });
+  if (options.ivDte) query.set('ivDte', String(options.ivDte));
+  if (options.rvWindows?.length) query.set('rvWindows', options.rvWindows.join(','));
+  return getJson(`/api/research/volatility?${query}`);
+}
+
+export function fetchContractIv(
+  occSymbol: string,
+  window: OptionBarsWindow = {},
+): Promise<ContractIvResponse> {
+  const query = new URLSearchParams();
+  if (window.fromIso) query.set('fromIso', window.fromIso);
+  if (window.toIso) query.set('toIso', window.toIso);
+  if (window.timeframe) query.set('timeframe', window.timeframe);
+  const suffix = query.size > 0 ? `?${query}` : '';
+  return getJson(`/api/research/contract-iv/${occSymbol}${suffix}`);
+}
+
 /** OCC-style symbol as the engine formats it (no root padding). */
 export function occSymbolFor(
   underlying: string,
