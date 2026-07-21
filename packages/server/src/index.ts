@@ -1,18 +1,38 @@
 import fastifyStatic from '@fastify/static';
+import { AlpacaDataProvider, AlpacaHttp, DataCatalog, FredDataProvider } from '@thetad/engine';
 import Fastify from 'fastify';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadConfig } from './config';
 import { Engine } from './engine';
+import { registerResearchRoutes } from './research';
 
 const config = loadConfig();
 const engine = new Engine(config);
+const catalog = new DataCatalog({
+  provider: new AlpacaDataProvider({
+    dataHttp: new AlpacaHttp({
+      keyId: config.alpaca.keyId,
+      secretKey: config.alpaca.secretKey,
+      baseUrl: config.alpaca.dataBaseUrl,
+    }),
+    tradingHttp: new AlpacaHttp({
+      keyId: config.alpaca.keyId,
+      secretKey: config.alpaca.secretKey,
+      baseUrl: config.alpaca.tradingBaseUrl,
+    }),
+  }),
+  fredProvider: new FredDataProvider({ apiKey: config.fredApiKey }),
+  rootDir: config.dataDir,
+});
 
 const app = Fastify({ logger: true });
 
 app.get('/api/health', async () => ({ ok: true, name: 'thetad', version: '0.0.1' }));
 
 app.get('/api/status', async () => engine.status());
+
+registerResearchRoutes(app, catalog);
 
 // SSE: the UI's live feed. Streams only ever carry data outward;
 // all actions go through REST, all decisions happen in the engine loop.

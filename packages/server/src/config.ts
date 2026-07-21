@@ -12,6 +12,8 @@ const configSchema = z.object({
     tradingBaseUrl: z.string(),
     dataBaseUrl: z.string().default('https://data.alpaca.markets'),
   }),
+  // Only reference datasets (rates, VIX) need this; empty disables them.
+  fredApiKey: z.string().default(''),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -36,5 +38,6 @@ export function loadConfig(): Config {
       secretKey: (isLive ? env.ALPACA_LIVE_SECRET_KEY : env.ALPACA_PAPER_SECRET_KEY) ?? '',
       tradingBaseUrl: isLive ? 'https://api.alpaca.markets' : 'https://paper-api.alpaca.markets',
     },
+    fredApiKey: env.FRED_API_KEY,
   });
 }

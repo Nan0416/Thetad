@@ -1,54 +1,52 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ResearchPage } from './pages/research-page';
+import { StatusPage } from './pages/status-page';
+import { cn } from './lib/cn';
 
-interface EngineStatus {
-  mode: string;
-  running: boolean;
-  tickCount: number;
-  lastTickUtc: string | null;
+const ROUTES = [
+  { hash: '#/status', label: 'status' },
+  { hash: '#/research', label: 'research' },
+] as const;
+
+const PLANNED = ['screener', 'execution', 'review'] as const;
+
+function useHashRoute(): string {
+  const [hash, setHash] = useState(window.location.hash || '#/status');
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash || '#/status');
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return hash;
 }
 
 export function App() {
-  const [status, setStatus] = useState<EngineStatus | null>(null);
-  const [connected, setConnected] = useState(false);
-
-  useEffect(() => {
-    const events = new EventSource('/api/events');
-    events.addEventListener('hello', (e) => {
-      setConnected(true);
-      setStatus(JSON.parse(e.data));
-    });
-    events.addEventListener('tick', () => {
-      fetch('/api/status')
-        .then((r) => r.json())
-        .then(setStatus);
-    });
-    events.onerror = () => setConnected(false);
-    return () => events.close();
-  }, []);
-
+  const route = useHashRoute();
   return (
-    <main style={{ fontFamily: 'ui-monospace, monospace', padding: '2rem', maxWidth: 640 }}>
-      <h1>
-        θ thetad{' '}
-        <span style={{ fontSize: '0.5em', color: connected ? 'green' : 'crimson' }}>
-          {connected ? 'connected' : 'disconnected'}
-        </span>
-      </h1>
-      <p style={{ color: '#666' }}>an open-source daemon that sells time</p>
-      {status ? (
-        <dl>
-          <dt>mode</dt>
-          <dd>{status.mode}</dd>
-          <dt>engine</dt>
-          <dd>{status.running ? 'running' : 'stopped'}</dd>
-          <dt>ticks</dt>
-          <dd>{status.tickCount}</dd>
-          <dt>last tick</dt>
-          <dd>{status.lastTickUtc ?? '—'}</dd>
-        </dl>
-      ) : (
-        <p>waiting for daemon…</p>
-      )}
-    </main>
+    <div className="mx-auto max-w-5xl px-8 pt-6 pb-12">
+      <header className="mb-6 flex items-baseline gap-6">
+        <h1 className="text-lg font-bold">θ thetad</h1>
+        <nav className="flex gap-4">
+          {ROUTES.map(({ hash, label }) => (
+            <a
+              key={hash}
+              href={hash}
+              className={cn(
+                'pb-0.5 text-ink-2 no-underline hover:text-ink',
+                route.startsWith(hash) && 'border-b-2 border-accent text-ink',
+              )}
+            >
+              {label}
+            </a>
+          ))}
+          {PLANNED.map((label) => (
+            <span key={label} className="cursor-default text-muted" title="coming later">
+              {label}
+            </span>
+          ))}
+        </nav>
+      </header>
+      {route.startsWith('#/research') ? <ResearchPage /> : <StatusPage />}
+    </div>
   );
 }

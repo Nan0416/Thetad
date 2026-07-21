@@ -39,6 +39,15 @@ export interface YearMinuteBars {
   readonly bars: readonly MinuteBarTuple[];
 }
 
+export interface YearDailyBars {
+  readonly v: 1;
+  readonly symbol: string;
+  readonly year: number;
+  readonly timeframe: '1Day';
+  readonly fetchedAtUtc: string;
+  readonly bars: readonly MinuteBarTuple[];
+}
+
 export interface ContractMinuteBars {
   readonly v: 1;
   readonly occSymbol: string;
@@ -106,6 +115,15 @@ const yearMinuteBarsSchema = z.object({
   symbol: z.string(),
   year: z.number(),
   timeframe: z.literal('1Min'),
+  fetchedAtUtc: z.string(),
+  bars: z.array(minuteBarTupleSchema),
+});
+
+const yearDailyBarsSchema = z.object({
+  v: z.literal(1),
+  symbol: z.string(),
+  year: z.number(),
+  timeframe: z.literal('1Day'),
   fetchedAtUtc: z.string(),
   bars: z.array(minuteBarTupleSchema),
 });
@@ -266,6 +284,87 @@ export class DataCatalog implements ContractCatalog {
   ): Promise<readonly Bar[]> {
     const snapshot = await this.getStockMinuteBarsRaw(symbol, year, forceRefresh);
     return tuplesToBars(snapshot.symbol, snapshot.bars);
+  }
+
+  /**
+   * Minute bars whose UTC date falls in [fromIso, toIso], spliced across
+   * the per-year cache files the range touches.
+   */
+  async getStockMinuteBarsRange(
+    symbol: string,
+    fromIso: string,
+    toIso: string,
+  ): Promise<readonly Bar[]> {
+    return this.spliceStockYears(symbol, fromIso, toIso, (year) =>
+      this.getStockMinuteBarsRaw(symbol, year),
+    );
+  }
+
+  // -- stock daily bars -----------------------------------------------------
+
+  async getStockDailyBarsRaw(
+    symbol: string,
+    year: number,
+    forceRefresh = false,
+  ): Promise<YearDailyBars> {
+    const upper = symbol.toUpperCase();
+    return this.cache.get(
+      {
+        path: join(this.rootDir, 'stock-daily-bars', `${upper}-${year}.json`),
+        schema: yearDailyBarsSchema as z.ZodType<YearDailyBars>,
+        // Past years are immutable; the current year grows a bar per
+        // session, so refresh after 24h (cheap: a single request).
+        isUsable: (cached) =>
+          year < new Date().getUTCFullYear() ||
+          Date.now() - Date.parse(cached.fetchedAtUtc) < 24 * 3_600_000,
+        fetch: async () => {
+          const { bars } = await this.provider.getStockDailyBars({ symbol: upper, year });
+          return {
+            v: 1 as const,
+            symbol: upper,
+            year,
+            timeframe: '1Day' as const,
+            fetchedAtUtc: new Date().toISOString(),
+            bars: bars.map(toTuple),
+          };
+        },
+      },
+      forceRefresh,
+    );
+  }
+
+  /** Daily bars whose UTC date falls in [fromIso, toIso]. */
+  async getStockDailyBarsRange(
+    symbol: string,
+    fromIso: string,
+    toIso: string,
+  ): Promise<readonly Bar[]> {
+    return this.spliceStockYears(symbol, fromIso, toIso, (year) =>
+      this.getStockDailyBarsRaw(symbol, year),
+    );
+  }
+
+  private async spliceStockYears(
+    symbol: string,
+    fromIso: string,
+    toIso: string,
+    loadYear: (year: number) => Promise<{ readonly bars: readonly MinuteBarTuple[] }>,
+  ): Promise<readonly Bar[]> {
+    for (const iso of [fromIso, toIso]) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error(`bad date: ${iso}`);
+    }
+    if (fromIso > toIso) throw new Error(`backwards range: ${fromIso} > ${toIso}`);
+    const tuples: MinuteBarTuple[] = [];
+    for (let year = Number(fromIso.slice(0, 4)); year <= Number(toIso.slice(0, 4)); year++) {
+      const snapshot = await loadYear(year);
+      // No push(...spread): a minute year holds ~200k tuples, far past
+      // the engine's call-argument limit.
+      for (const tuple of snapshot.bars) {
+        const dateIso = tuple[0].slice(0, 10);
+        if (dateIso >= fromIso && dateIso <= toIso) tuples.push(tuple);
+      }
+    }
+    return tuplesToBars(symbol.toUpperCase(), tuples);
   }
 
   // -- option minute bars ---------------------------------------------------

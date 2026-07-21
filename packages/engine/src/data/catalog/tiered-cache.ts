@@ -13,18 +13,23 @@ export interface TieredCacheSpec<V> {
 
 /**
  * The three-tier read path every dataset in the DataCatalog shares:
- *   1. memory  — return the memoized value
+ *   1. memory  — return the memoized value if still usable
  *   2. file    — zod-validate the cache file; memoize and return if usable
  *   3. provider — fetch, write the file atomically, memoize, return
- * A file that fails validation or the isUsable rule falls through to the
- * provider. forceRefresh skips tiers 1-2.
+ * A value that fails validation or the isUsable rule falls through to the
+ * next tier — including the memo, so freshness rules (e.g. a 24h TTL on
+ * current-year files) hold in a long-running process. forceRefresh skips
+ * tiers 1-2.
  */
 export class TieredCache {
   private readonly memo = new Map<string, unknown>();
 
   async get<V>(spec: TieredCacheSpec<V>, forceRefresh = false): Promise<V> {
     if (!forceRefresh) {
-      if (this.memo.has(spec.path)) return this.memo.get(spec.path) as V;
+      if (this.memo.has(spec.path)) {
+        const memoized = this.memo.get(spec.path) as V;
+        if (spec.isUsable?.(memoized) ?? true) return memoized;
+      }
 
       const cached = this.readFile(spec);
       if (cached !== null && (spec.isUsable?.(cached) ?? true)) {

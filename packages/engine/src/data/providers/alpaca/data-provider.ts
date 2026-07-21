@@ -69,6 +69,14 @@ export interface GetStockMinuteBarsResponse {
   readonly bars: readonly AlpacaBar[];
 }
 
+export interface GetStockDailyBarsRequest {
+  readonly symbol: string;
+  readonly year: number;
+}
+export interface GetStockDailyBarsResponse {
+  readonly bars: readonly AlpacaBar[];
+}
+
 export interface GetOptionMinuteBarsRequest {
   readonly occSymbol: string;
   /** Fetch through this date (inclusive); start is Alpaca's data floor. */
@@ -120,13 +128,25 @@ export class AlpacaDataProvider {
   async getStockMinuteBars(
     request: GetStockMinuteBarsRequest,
   ): Promise<GetStockMinuteBarsResponse> {
+    return { bars: await this.getStockBarsPaged(request.symbol, request.year, '1Min') };
+  }
+
+  async getStockDailyBars(request: GetStockDailyBarsRequest): Promise<GetStockDailyBarsResponse> {
+    return { bars: await this.getStockBarsPaged(request.symbol, request.year, '1Day') };
+  }
+
+  private async getStockBarsPaged(
+    symbol: string,
+    year: number,
+    timeframe: '1Min' | '1Day',
+  ): Promise<readonly AlpacaBar[]> {
     const bars: AlpacaBar[] = [];
     let pageToken: string | undefined;
     do {
       const query: Record<string, string> = {
-        timeframe: '1Min',
-        start: `${request.year}-01-01`,
-        end: `${request.year}-12-31T23:59:59Z`,
+        timeframe,
+        start: `${year}-01-01`,
+        end: `${year}-12-31T23:59:59Z`,
         limit: '10000',
         adjustment: 'split',
         feed: 'sip',
@@ -135,13 +155,13 @@ export class AlpacaDataProvider {
       const page = await this.dataHttp.request(
         stockBarsResponseSchema,
         'GET',
-        `/v2/stocks/${request.symbol}/bars`,
+        `/v2/stocks/${symbol}/bars`,
         { query },
       );
       bars.push(...(page.bars ?? []));
       pageToken = page.next_page_token ?? undefined;
     } while (pageToken);
-    return { bars };
+    return bars;
   }
 
   async getOptionMinuteBars(
