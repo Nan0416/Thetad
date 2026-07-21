@@ -11,11 +11,19 @@ import {
   fetchStockBars,
   fmtUsd,
   isRegularHoursNy,
-  occSymbolFor,
   type MinuteBarTuple,
   type OptionRight,
   type Timeframe,
 } from '../lib/api';
+import {
+  ATM_PER_EXPIRATION,
+  buildContractRows,
+  MIN_CONTRACT_YEAR,
+  selectContractView,
+  TABLE_CAP,
+  type SearchableRow,
+} from '../lib/contracts';
+import { isoDaysAgo, timeframeFor } from '../lib/dates';
 import { useTheme } from '../theme';
 
 interface Leg {
@@ -37,26 +45,6 @@ interface View {
 }
 
 const MAX_LEGS = 7;
-const TABLE_CAP = 200;
-/** Unfiltered, show this many strikes per expiration (see filteredRows). */
-const ATM_PER_EXPIRATION = 20;
-/** Alpaca's contract-listing floor. */
-const MIN_CONTRACT_YEAR = 2024;
-
-function isoDaysAgo(days: number, fromIso: string): string {
-  return new Date(Date.parse(fromIso) - days * 86_400_000).toISOString().slice(0, 10);
-}
-
-/** Above ~90 days of minutes, the chart and payloads want daily bars. */
-function timeframeFor(fromIso: string, toIso: string): Timeframe {
-  const days = (Date.parse(toIso) - Date.parse(fromIso)) / 86_400_000;
-  return days > 90 ? '1Day' : '1Min';
-}
-
-function searchText(row: ContractRow): string {
-  const right = row.right === 'P' ? 'p put' : 'c call';
-  return `${row.occSymbol} ${right} ${row.frequency ?? ''} ${row.expirationIso} ${fmtUsd(row.strikeCents)} ${row.strikeCents / 100}`.toLowerCase();
-}
 
 export function ResearchPage() {
   const theme = useTheme();
@@ -72,9 +60,7 @@ export function ResearchPage() {
   const [optionTo, setOptionTo] = useState(todayIso);
   const [view, setView] = useState<View | null>(null);
   const [stockBars, setStockBars] = useState<readonly MinuteBarTuple[]>([]);
-  const [contractRows, setContractRows] = useState<readonly (ContractRow & { search: string })[]>(
-    [],
-  );
+  const [contractRows, setContractRows] = useState<readonly SearchableRow[]>([]);
   const [legs, setLegs] = useState<readonly Leg[]>([]);
   const [filter, setFilter] = useState('');
   const [unexpiredCount, setUnexpiredCount] = useState(0);
@@ -116,44 +102,18 @@ export function ResearchPage() {
         ),
       ]);
 
-      const rows: (ContractRow & { search: string })[] = [];
-      let unexpired = 0;
-      for (const yearContracts of contractYears) {
-        for (const [expirationIso, strikes] of Object.entries(yearContracts.expirations)) {
-          if (expirationIso < graphFrom || expirationIso > graphTo) continue;
-          // Only complete lives are researchable; listing the rest would
-          // bury the selectable rows under today's un-expired chain.
-          if (expirationIso >= todayIso) {
-            unexpired++;
-            continue;
-          }
-          const frequency = yearContracts.frequencies[expirationIso] ?? null;
-          for (const right of ['C', 'P'] as const) {
-            const strikesCents = right === 'P' ? strikes.putStrikesCents : strikes.callStrikesCents;
-            for (const strikeCents of strikesCents) {
-              const row: ContractRow = {
-                occSymbol: occSymbolFor(symbol, expirationIso, right, strikeCents),
-                right,
-                frequency,
-                expirationIso,
-                strikeCents,
-              };
-              rows.push({ ...row, search: searchText(row) });
-            }
-          }
-        }
-      }
-      rows.sort(
-        (a, b) =>
-          b.expirationIso.localeCompare(a.expirationIso) ||
-          a.strikeCents - b.strikeCents ||
-          a.right.localeCompare(b.right),
-      );
+      const { rows, unexpiredCount } = buildContractRows({
+        symbol,
+        contractYears,
+        fromIso: graphFrom,
+        toIso: graphTo,
+        todayIso,
+      });
 
       setView(nextView);
       setStockBars(stock.bars);
       setContractRows(rows);
-      setUnexpiredCount(unexpired);
+      setUnexpiredCount(unexpiredCount);
       setLegs(refetchedLegs);
     } catch (e) {
       setError((e as Error).message);
@@ -226,37 +186,10 @@ export function ResearchPage() {
   /** Latest close in the window — what "near the money" is measured against. */
   const spotCents = useMemo(() => stockBars.at(-1)?.[4] ?? 0, [stockBars]);
 
-  /**
-   * Filtered: exactly what matches, newest expirations first. Unfiltered:
-   * a few strikes around the money for EACH expiration — one SPY chain runs
-   * 300+ strikes, so listing them in full would fill the table with a single
-   * expiration and hide every other date and cadence.
-   */
-  const { rows: filteredRows, atmOnly } = useMemo(() => {
-    const terms = filter.toLowerCase().split(/\s+/).filter(Boolean);
-    if (terms.length > 0) {
-      return {
-        rows: contractRows.filter((row) => terms.every((term) => row.search.includes(term))),
-        atmOnly: false,
-      };
-    }
-    const byExpiration = new Map<string, (typeof contractRows)[number][]>();
-    for (const row of contractRows) {
-      const chain = byExpiration.get(row.expirationIso);
-      if (chain) chain.push(row);
-      else byExpiration.set(row.expirationIso, [row]);
-    }
-    const rows: (typeof contractRows)[number][] = [];
-    for (const chain of byExpiration.values()) {
-      const nearest = [...chain]
-        .sort((a, b) => Math.abs(a.strikeCents - spotCents) - Math.abs(b.strikeCents - spotCents))
-        .slice(0, ATM_PER_EXPIRATION)
-        .sort((a, b) => a.strikeCents - b.strikeCents || a.right.localeCompare(b.right));
-      rows.push(...nearest);
-      if (rows.length >= TABLE_CAP) break;
-    }
-    return { rows, atmOnly: true };
-  }, [contractRows, filter, spotCents]);
+  const { rows: filteredRows, atmOnly } = useMemo(
+    () => selectContractView(contractRows, filter, spotCents),
+    [contractRows, filter, spotCents],
+  );
 
   const visibleStockBars = useMemo(
     () =>

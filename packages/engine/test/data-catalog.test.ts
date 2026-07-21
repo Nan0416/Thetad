@@ -304,6 +304,22 @@ describe('DataCatalog: option minute bars', () => {
   });
 });
 
+describe('DataCatalog: option daily bars', () => {
+  it('caches native daily bars in their own tree, immutable once expired', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'thetad-cat-'));
+    const counter = { calls: 0 };
+    const bars = await makeCatalog(dir, counter).getOptionDailyBars(EXPIRED_OCC);
+    expect(bars).toHaveLength(2);
+    expect(existsSync(join(dir, 'option-daily-bars', `${EXPIRED_OCC}.json`))).toBe(true);
+    expect(existsSync(join(dir, 'option-minute-bars', `${EXPIRED_OCC}.json`))).toBe(false);
+    const callsAfterFirst = counter.calls;
+
+    // Fresh instance: complete (expired) daily file is served without refetch.
+    await makeCatalog(dir, counter).getOptionDailyBars(EXPIRED_OCC);
+    expect(counter.calls).toBe(callsAfterFirst);
+  });
+});
+
 describe('nearestStrikeCents', () => {
   it('picks the closest listed strike', () => {
     const strikes = [cents(49_000), cents(50_000), cents(51_000)];

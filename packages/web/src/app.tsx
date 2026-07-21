@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ResearchPage } from './pages/research-page';
 import { StatusPage } from './pages/status-page';
+import { VolatilityPage } from './pages/volatility-page';
 import { cn } from './lib/cn';
 
 const ROUTES = [
   { hash: '#/status', label: 'status' },
-  { hash: '#/research', label: 'research' },
+  { hash: '#/research', label: 'payoff' },
+  { hash: '#/volatility', label: 'volatility' },
 ] as const;
 
 const PLANNED = ['screener', 'execution', 'review'] as const;
@@ -46,7 +48,13 @@ export function App() {
           ))}
         </nav>
       </header>
-      {route.startsWith('#/research') ? <ResearchPage /> : <StatusPage />}
+      {route.startsWith('#/research') ? (
+        <ResearchPage />
+      ) : route.startsWith('#/volatility') ? (
+        <VolatilityPage />
+      ) : (
+        <StatusPage />
+      )}
     </div>
   );
 }

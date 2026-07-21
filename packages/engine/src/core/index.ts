@@ -2,7 +2,7 @@ export * from './money';
 export * from './occ';
 export * from './calendar';
 export * from './expirations';
-export * from './bars';
+export * from './volatility';
 export * from './black-scholes';
 export * from './types';
 export * from './evaluator';

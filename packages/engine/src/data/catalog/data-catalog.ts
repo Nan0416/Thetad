@@ -164,7 +164,9 @@ export interface DataCatalogOptions {
  * Cache tree under rootDir:
  *   options/<SYMBOL>-<year>-contracts.json   listed contracts per year
  *   stock-minute-bars/<SYMBOL>-<year>.json   1-min stock bars per year
+ *   stock-daily-bars/<SYMBOL>-<year>.json    1-day stock bars per year
  *   option-minute-bars/<OCC>.json            1-min option bars per contract
+ *   option-daily-bars/<OCC>.json             1-day option bars per contract
  *
  * Past years and expired contracts are immutable; current-year files
  * refresh via forceRefresh (the fetch:* scripts' --force).
@@ -367,21 +369,41 @@ export class DataCatalog implements ContractCatalog {
     return tuplesToBars(symbol.toUpperCase(), tuples);
   }
 
-  // -- option minute bars ---------------------------------------------------
+  // -- option bars (minute + native daily, one contract file each) ----------
 
   async getOptionMinuteBarsRaw(occSymbol: string): Promise<ContractMinuteBars> {
+    return this.optionBarsRaw(occSymbol, '1Min');
+  }
+
+  async getOptionMinuteBars(occSymbol: string): Promise<readonly Bar[]> {
+    return tuplesToBars(occSymbol, (await this.getOptionMinuteBarsRaw(occSymbol)).bars);
+  }
+
+  async getOptionDailyBarsRaw(occSymbol: string): Promise<ContractMinuteBars> {
+    return this.optionBarsRaw(occSymbol, '1Day');
+  }
+
+  async getOptionDailyBars(occSymbol: string): Promise<readonly Bar[]> {
+    return tuplesToBars(occSymbol, (await this.getOptionDailyBarsRaw(occSymbol)).bars);
+  }
+
+  private async optionBarsRaw(
+    occSymbol: string,
+    timeframe: '1Min' | '1Day',
+  ): Promise<ContractMinuteBars> {
     const { expirationIso } = OccSymbol.parse(occSymbol);
+    const dir = timeframe === '1Day' ? 'option-daily-bars' : 'option-minute-bars';
     return this.cache.get({
-      path: join(this.rootDir, 'option-minute-bars', `${occSymbol}.json`),
+      path: join(this.rootDir, dir, `${occSymbol}.json`),
       schema: contractMinuteBarsSchema as z.ZodType<ContractMinuteBars>,
       // Only a complete life (fetched through expiration) is served from
       // cache; still-active contracts refetch and extend on each touch.
       isUsable: (cached) => cached.fetchedThroughIso >= expirationIso,
       fetch: async () => {
-        const { bars } = await this.provider.getOptionMinuteBars({
-          occSymbol,
-          endIso: expirationIso,
-        });
+        const { bars } =
+          timeframe === '1Day'
+            ? await this.provider.getOptionDailyBars({ occSymbol, endIso: expirationIso })
+            : await this.provider.getOptionMinuteBars({ occSymbol, endIso: expirationIso });
         const todayIso = new Date().toISOString().slice(0, 10);
         return {
           v: 1 as const,
@@ -392,11 +414,6 @@ export class DataCatalog implements ContractCatalog {
         };
       },
     });
-  }
-
-  async getOptionMinuteBars(occSymbol: string): Promise<readonly Bar[]> {
-    const snapshot = await this.getOptionMinuteBarsRaw(occSymbol);
-    return tuplesToBars(occSymbol, snapshot.bars);
   }
 }
 

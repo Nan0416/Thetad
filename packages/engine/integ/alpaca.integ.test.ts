@@ -126,8 +126,11 @@ describe('alpaca orders (unfillable, canceled)', () => {
 
   it('round-trips a multi-leg put spread demanding an absurd credit', async () => {
     const { quotes } = await marketData.getOptionChain({ underlying: 'SPY' });
+    // The chain can still list a contract that expired earlier today; ordering
+    // against it is rejected as inactive, so keep only still-tradeable puts.
+    const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const puts = Object.keys(quotes)
-      .filter((s) => /P\d{8}$/.test(s))
+      .filter((s) => /P\d{8}$/.test(s) && OccSymbol.parse(s).expirationIso > todayIso)
       .sort();
     expect(puts.length).toBeGreaterThanOrEqual(2);
 

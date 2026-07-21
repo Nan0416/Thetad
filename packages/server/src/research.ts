@@ -1,10 +1,5 @@
 import type { Bar, DataCatalog, ExpirationFrequency, MinuteBarTuple } from '@thetad/engine';
-import {
-  aggregateDailyBars,
-  ExpirationClassifier,
-  MarketCalendar,
-  OccSymbol,
-} from '@thetad/engine';
+import { ExpirationClassifier, MarketCalendar, OccSymbol } from '@thetad/engine';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
@@ -103,14 +98,16 @@ export function registerResearchRoutes(app: FastifyInstance, catalog: DataCatalo
         error: `contract not yet expired (${occ.expirationIso}); research serves complete lives only`,
       });
     }
-    const life = await catalog.getOptionMinuteBars(occ.toString());
+    // 1Day serves the native daily dataset; 1Min the per-minute one.
+    const life =
+      query.data.timeframe === '1Day'
+        ? await catalog.getOptionDailyBars(occ.toString())
+        : await catalog.getOptionMinuteBars(occ.toString());
     const { fromIso, toIso } = query.data;
-    const inWindow = life.filter(
+    const bars = life.filter(
       (b) =>
         (!fromIso || b.tsUtc.slice(0, 10) >= fromIso) && (!toIso || b.tsUtc.slice(0, 10) <= toIso),
     );
-    const bars =
-      query.data.timeframe === '1Day' ? aggregateDailyBars(inWindow, calendar) : inWindow;
     return {
       occSymbol: occ.toString(),
       underlying: occ.underlying,
