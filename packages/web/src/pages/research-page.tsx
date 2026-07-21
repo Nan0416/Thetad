@@ -23,6 +23,7 @@ import {
   TABLE_CAP,
   type SearchableRow,
 } from '../lib/contracts';
+import { isoDaysAgo, timeframeFor } from '../lib/dates';
 import { useTheme } from '../theme';
 
 interface Leg {
@@ -44,16 +45,6 @@ interface View {
 }
 
 const MAX_LEGS = 7;
-
-function isoDaysAgo(days: number, fromIso: string): string {
-  return new Date(Date.parse(fromIso) - days * 86_400_000).toISOString().slice(0, 10);
-}
-
-/** Above ~90 days of minutes, the chart and payloads want daily bars. */
-function timeframeFor(fromIso: string, toIso: string): Timeframe {
-  const days = (Date.parse(toIso) - Date.parse(fromIso)) / 86_400_000;
-  return days > 90 ? '1Day' : '1Min';
-}
 
 export function ResearchPage() {
   const theme = useTheme();

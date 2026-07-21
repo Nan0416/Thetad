@@ -86,6 +86,16 @@ describe('nearestExpirationToDte', () => {
   it('returns null when nothing is in the future', () => {
     expect(nearestExpirationToDte(expirations, '2025-03-01', 30)).toBeNull();
   });
+
+  it('breaks ties toward the longer-dated expiration, regardless of input order', () => {
+    // From 2025-06-01: 06-29 is 28 DTE, 07-03 is 32 DTE — both distance 2 from 30.
+    expect(nearestExpirationToDte(['2025-06-29', '2025-07-03'], '2025-06-01', 30)).toBe(
+      '2025-07-03',
+    );
+    expect(nearestExpirationToDte(['2025-07-03', '2025-06-29'], '2025-06-01', 30)).toBe(
+      '2025-07-03',
+    );
+  });
 });
 
 describe('averageIv', () => {

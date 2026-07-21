@@ -82,13 +82,16 @@ export function nearestExpirationToDte(
 ): string | null {
   let best: string | null = null;
   let bestDistance = Infinity;
+  let bestDte = -1;
   for (const expirationIso of expirations) {
     const dte = calendarDaysBetween(asofIso, expirationIso);
     if (dte <= 0) continue;
     const distance = Math.abs(dte - targetDte);
-    if (distance < bestDistance) {
-      bestDistance = distance;
+    // On a tie, keep the longer-dated expiration (independent of input order).
+    if (distance < bestDistance || (distance === bestDistance && dte > bestDte)) {
       best = expirationIso;
+      bestDistance = distance;
+      bestDte = dte;
     }
   }
   return best;

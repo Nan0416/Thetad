@@ -12,7 +12,6 @@ import {
   fetchVolatility,
   fmtUsd,
   type MinuteBarTuple,
-  type Timeframe,
   type VolatilityResponse,
   type VolPoint,
 } from '../lib/api';
@@ -24,6 +23,7 @@ import {
   TABLE_CAP,
   type SearchableRow,
 } from '../lib/contracts';
+import { isoDaysAgo, timeframeFor } from '../lib/dates';
 import { useTheme } from '../theme';
 
 interface SelectedContract {
@@ -38,15 +38,6 @@ const IV_SLOT = 0;
 const VIX_SLOT = 7;
 const RV_SLOTS = [5, 3, 4, 1] as const;
 const CONTRACT_SLOTS = [2, 6] as const;
-
-function isoDaysAgo(days: number, fromIso: string): string {
-  return new Date(Date.parse(fromIso) - days * 86_400_000).toISOString().slice(0, 10);
-}
-
-function timeframeFor(fromIso: string, toIso: string): Timeframe {
-  const days = (Date.parse(toIso) - Date.parse(fromIso)) / 86_400_000;
-  return days > 90 ? '1Day' : '1Min';
-}
 
 /** Parse a comma-separated "20, 60" into day counts. Empty = no RV. */
 function parseRvWindows(raw: string): readonly number[] {
@@ -157,15 +148,18 @@ export function VolatilityPage() {
     if (slot === undefined) return;
     setBusy(true);
     try {
+      const timeframe = timeframeFor(graphFrom, graphTo);
       const response = await fetchContractIv(row.occSymbol, {
         fromIso: graphFrom,
         toIso: graphTo,
-        timeframe: timeframeFor(graphFrom, graphTo),
+        timeframe,
       });
-      setSelected((current) => [
-        ...current,
-        { occSymbol: response.occSymbol, slot, points: response.points },
-      ]);
+      // Daily points share the vol lines' per-day slot; minute points stay intraday.
+      const points =
+        timeframe === '1Day'
+          ? response.points.map(([ts, iv]) => [ts.slice(0, 10), iv] as const)
+          : response.points;
+      setSelected((current) => [...current, { occSymbol: response.occSymbol, slot, points }]);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -223,9 +217,11 @@ export function VolatilityPage() {
       showPrice && stockBars.length > 0
         ? {
             label: symbol ?? 'price',
+            // Stamp by NY date so candles share one x-slot per day with the
+            // daily vol lines (which the chart keys off dateIso).
             candles: stockBars.map(([ts, o, h, l, c]) => {
               const [so, sh, sl, sc] = sanitizeCandle(o, h, l, c);
-              return [ts, so / 100, sh / 100, sl / 100, sc / 100] as const;
+              return [ts.slice(0, 10), so / 100, sh / 100, sl / 100, sc / 100] as const;
             }),
           }
         : undefined,
@@ -251,20 +247,22 @@ export function VolatilityPage() {
                 {priceSeries.label} (candles, left axis)
               </span>
             )}
-            {chartSeries.map((s) => (
-              <span key={s.key} className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-0.5 w-4"
-                  style={{
-                    background: s.color,
-                    ...(s.dashed && {
-                      background: `repeating-linear-gradient(90deg, ${s.color} 0 4px, transparent 4px 7px)`,
-                    }),
-                  }}
-                />
-                {s.label}
-              </span>
-            ))}
+            {chartSeries
+              .filter((s) => s.points.length > 0)
+              .map((s) => (
+                <span key={s.key} className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-0.5 w-4"
+                    style={{
+                      background: s.color,
+                      ...(s.dashed && {
+                        background: `repeating-linear-gradient(90deg, ${s.color} 0 4px, transparent 4px 7px)`,
+                      }),
+                    }}
+                  />
+                  {s.label}
+                </span>
+              ))}
           </div>
         </>
       ) : (

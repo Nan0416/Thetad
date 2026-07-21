@@ -27,7 +27,8 @@ const FALLBACK_RATE = 0.04;
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
 
-/** Comma-separated day counts, e.g. "20,60"; deduped and sorted. Empty = no RV. */
+/** Comma-separated day counts, e.g. "20,60"; deduped, sorted, capped. Empty = no RV. */
+const MAX_RV_WINDOWS = 8;
 const rvWindowsSchema = z
   .string()
   .optional()
@@ -36,7 +37,7 @@ const rvWindowsSchema = z
       .split(',')
       .map((s) => Number(s.trim()))
       .filter((n) => Number.isInteger(n) && n >= 2 && n <= 250);
-    return [...new Set(parsed)].sort((a, b) => a - b);
+    return [...new Set(parsed)].sort((a, b) => a - b).slice(0, MAX_RV_WINDOWS);
   });
 
 const volatilityQuerySchema = z.object({
@@ -134,6 +135,8 @@ export function registerVolatilityRoutes(app: FastifyInstance, catalog: DataCata
     const dailyBars = await catalog.getStockDailyBarsRange(symbol, primedFrom, toIso);
     const closes = dailyBars.map((b) => ({ dateIso: b.tsUtc.slice(0, 10), close: b.closeCents }));
 
+    // RV runs on raw daily closes: a bad-tick close (unlike the chart's
+    // sanitized candle wicks) would distort the affected window's vol.
     const realized: Record<string, readonly VolPair[]> = {};
     for (const window of rvWindows) {
       realized[`window${window}`] = rollingRealizedVol(closes, window)
@@ -179,9 +182,17 @@ export function registerVolatilityRoutes(app: FastifyInstance, catalog: DataCata
 
       // Monthly expirations across every year the window's ATM contracts reach.
       const today = todayIso();
+      const currentYear = Number(today.slice(0, 4));
       const years = new Set<number>();
-      for (const bar of inWindow) years.add(Number(bar.tsUtc.slice(0, 4)) + 1); // exp ~1mo out may roll a year
-      for (const bar of inWindow) years.add(Number(bar.tsUtc.slice(0, 4)));
+      for (const bar of inWindow) {
+        const barYear = Number(bar.tsUtc.slice(0, 4));
+        years.add(barYear);
+        // A late-December date's ~30-DTE monthly rolls into the next year, but
+        // never past the current one: a future-year expiration can't be expired
+        // yet (it would be skipped below), and fetching it would permanently
+        // cache a sparse future chain (getContracts has no TTL).
+        years.add(Math.min(barYear + 1, currentYear));
+      }
       const monthlies: string[] = [];
       const strikesByExp = new Map<string, readonly Cents[]>();
       for (const year of [...years].sort()) {
@@ -215,14 +226,21 @@ export function registerVolatilityRoutes(app: FastifyInstance, catalog: DataCata
         const spot = bar.closeCents / 100;
         const strike = strikeCents / 100;
 
-        const sides = await Promise.all(
-          (['C', 'P'] as const).map(async (right) => {
-            const occ = new OccSymbol(upper, expirationIso, right, strikeCents).toString();
-            const price = (await dailyOptionCloses(occ, optionMemo)).get(dateIso);
-            if (price === undefined) return null;
-            return impliedVol(price / 100, { spot, strike, tYears, rate, right });
-          }),
-        );
+        // One flaky contract fetch shouldn't sink the whole series — drop the
+        // day and carry on, the way the VIX/FRED loads degrade.
+        let sides: readonly (number | null)[];
+        try {
+          sides = await Promise.all(
+            (['C', 'P'] as const).map(async (right) => {
+              const occ = new OccSymbol(upper, expirationIso, right, strikeCents).toString();
+              const price = (await dailyOptionCloses(occ, optionMemo)).get(dateIso);
+              if (price === undefined) return null;
+              return impliedVol(price / 100, { spot, strike, tYears, rate, right });
+            }),
+          );
+        } catch {
+          continue;
+        }
         const iv = averageIv(sides[0] ?? null, sides[1] ?? null);
         if (iv !== null) series.push([dateIso, iv]);
       }
@@ -296,6 +314,8 @@ export function registerVolatilityRoutes(app: FastifyInstance, catalog: DataCata
       if (spotCents === undefined) continue;
       const dateIso = bar.tsUtc.slice(0, 10);
       const tYears = calendarDaysBetween(dateIso, occ.expirationIso) / 365;
+      // Expiration day itself (t = 0) is dropped: Black-Scholes IV is
+      // numerically unstable as t -> 0 and the option is nearly all intrinsic.
       if (tYears <= 0) continue;
       const iv = impliedVol(bar.closeCents / 100, {
         spot: spotCents / 100,

@@ -106,7 +106,7 @@ export interface ContractIvResponse {
 export interface VolatilityOptions {
   /** Constant-maturity target for the ATM IV line, in days. */
   readonly ivDte?: number;
-  /** Extra realized-vol windows; 30 is always included server-side. */
+  /** Realized-vol windows to compute; empty (the default) means no RV lines. */
   readonly rvWindows?: readonly number[];
 }
 
