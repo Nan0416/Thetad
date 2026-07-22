@@ -14,9 +14,12 @@ const PLANNED = ['screener', 'execution', 'review'] as const;
 /** The hash split into a leading section and the rest, e.g. research/daily-payoff. */
 function useRoute(): { section: string; sub: string } {
   const parse = () => {
-    const path = window.location.hash.replace(/^#\/?/, '');
-    const [section = 'status', ...rest] = path.split('/');
-    return { section, sub: rest.join('/') };
+    // Bare URL (no hash) defaults to the status section, so its nav item highlights.
+    const path = window.location.hash.replace(/^#\/?/, '') || 'status';
+    const slash = path.indexOf('/');
+    return slash === -1
+      ? { section: path, sub: '' }
+      : { section: path.slice(0, slash), sub: path.slice(slash + 1) };
   };
   const [route, setRoute] = useState(parse);
   useEffect(() => {
