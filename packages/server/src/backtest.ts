@@ -17,7 +17,7 @@ const MIN_DATE_ISO = '2024-02-01';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
 
-const backtestQuerySchema = z.object({
+export const backtestQuerySchema = z.object({
   underlying: z
     .string()
     .regex(/^[A-Za-z]{1,6}$/, 'expected a stock symbol')
@@ -42,6 +42,31 @@ const backtestQuerySchema = z.object({
   ivMinObs: z.coerce.number().int().min(10).max(500).default(60),
 });
 
+export type BacktestQuery = z.infer<typeof backtestQuerySchema>;
+
+/** Query → engine params: percent inputs become bps/decimals, money becomes Cents. */
+export function toShortPutParams(q: BacktestQuery, endIso: string): ShortPutParams {
+  return {
+    underlying: q.underlying.toUpperCase(),
+    dteMin: q.dteMin,
+    dteMax: q.dteMax,
+    targetDelta: q.targetDelta,
+    deltaTolerance: q.deltaTolerance,
+    minIvRank: q.minIvRank,
+    profitTargetBps: Math.round(q.profitPct * 100),
+    stopLossBps: Math.round(q.stopPct * 100),
+    timeExitDte: q.timeExitDte,
+    slippageCents: cents(q.slippageCents),
+    feePerContractCents: cents(q.feeCents),
+    rate: q.ratePct / 100,
+    divYield: q.divYieldPct / 100,
+    ivRankLookbackDays: q.ivLookback,
+    ivRankMinObservations: q.ivMinObs,
+    startIso: q.startIso,
+    endIso,
+  };
+}
+
 export function registerBacktestRoutes(
   app: FastifyInstance,
   catalog: DataCatalog,
@@ -49,6 +74,9 @@ export function registerBacktestRoutes(
 ): void {
   const calendar = MarketCalendar.nyse();
   const nyTodayIso = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  // Serialize runs: a cold backtest holds the request for minutes of Alpaca
+  // fetching, and stacking a second one just duplicates that work.
+  let running = false;
 
   app.get('/api/research/backtest/short-put', async (request, reply) => {
     const query = backtestQuerySchema.safeParse(request.query);
@@ -65,39 +93,30 @@ export function registerBacktestRoutes(
     if (q.dteMin > q.dteMax) {
       return reply.code(400).send({ error: 'dteMin is above dteMax' });
     }
+    if (running) {
+      return reply
+        .code(409)
+        .send({ error: 'a backtest is already running — wait for it to finish' });
+    }
 
-    const params: ShortPutParams = {
-      underlying: q.underlying.toUpperCase(),
-      dteMin: q.dteMin,
-      dteMax: q.dteMax,
-      targetDelta: q.targetDelta,
-      deltaTolerance: q.deltaTolerance,
-      minIvRank: q.minIvRank,
-      profitTargetBps: Math.round(q.profitPct * 100),
-      stopLossBps: Math.round(q.stopPct * 100),
-      timeExitDte: q.timeExitDte,
-      slippageCents: cents(q.slippageCents),
-      feePerContractCents: cents(q.feeCents),
-      rate: q.ratePct / 100,
-      divYield: q.divYieldPct / 100,
-      ivRankLookbackDays: q.ivLookback,
-      ivRankMinObservations: q.ivMinObs,
-      startIso: q.startIso,
-      endIso,
-    };
-
-    const result = await runShortPutBacktest(params, dataSource, calendar, catalog);
-    return {
-      params,
-      metrics: result.metrics,
-      trades: result.trades,
-      /** Compact: [dateIso, equityCents, ivRank|null, inPosition 0|1]. */
-      equityCurve: result.equityCurve.map((p) => [
-        p.dateIso,
-        p.equityCents,
-        p.ivRank === null ? null : Math.round(p.ivRank * 10) / 10,
-        p.inPosition ? 1 : 0,
-      ]),
-    };
+    const params = toShortPutParams(q, endIso);
+    running = true;
+    try {
+      const result = await runShortPutBacktest(params, dataSource, calendar, catalog);
+      return {
+        params,
+        metrics: result.metrics,
+        trades: result.trades,
+        /** Compact: [dateIso, equityCents, ivRank|null, inPosition 0|1]. */
+        equityCurve: result.equityCurve.map((p) => [
+          p.dateIso,
+          p.equityCents,
+          p.ivRank === null ? null : Math.round(p.ivRank * 10) / 10,
+          p.inPosition ? 1 : 0,
+        ]),
+      };
+    } finally {
+      running = false;
+    }
   });
 }

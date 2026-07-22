@@ -62,6 +62,7 @@ export function BacktestPage() {
   const [error, setError] = useState('');
 
   async function confirm() {
+    if (busy) return; // Enter in an input must not stack a second run
     const sym = symbolInput.trim().toUpperCase();
     if (!/^[A-Z]{1,6}$/.test(sym)) {
       setError('enter a stock symbol (1–6 letters)');
@@ -71,14 +72,21 @@ export function BacktestPage() {
       setError('window is empty or backwards');
       return;
     }
+    // Every field must be a number — silently falling back to a server
+    // default would run a backtest that doesn't match the form.
+    const numeric: Record<string, number> = {};
+    for (const field of FIELDS) {
+      const raw = fields[field.key].trim();
+      const value = Number(raw);
+      if (raw === '' || !Number.isFinite(value)) {
+        setError(`enter a number for "${field.label}"`);
+        return;
+      }
+      numeric[field.key] = value;
+    }
     setBusy(true);
     setError('');
     try {
-      const numeric = Object.fromEntries(
-        Object.entries(fields)
-          .map(([key, raw]) => [key, Number(raw)])
-          .filter(([, value]) => Number.isFinite(value)),
-      );
       const [result, stock] = await Promise.all([
         fetchShortPutBacktest({
           underlying: sym,
@@ -165,18 +173,17 @@ export function BacktestPage() {
               <span style={{ color: theme.series[0] }}>▲</span> entry (sell put, strike label)
             </span>
             <span>
-              <span style={{ color: exitReasonColor('profit_target', theme.mode) }}>▼</span> profit
+              <span style={{ color: exitReasonColor('profit_target', theme) }}>▼</span> profit
               target
             </span>
             <span>
-              <span style={{ color: exitReasonColor('stop_loss', theme.mode) }}>▼</span> stop loss
+              <span style={{ color: exitReasonColor('stop_loss', theme) }}>▼</span> stop loss
             </span>
             <span>
-              <span style={{ color: exitReasonColor('time_exit', theme.mode) }}>▼</span> time exit
+              <span style={{ color: exitReasonColor('time_exit', theme) }}>▼</span> time exit
             </span>
             <span>
-              <span style={{ color: exitReasonColor('end_of_data', theme.mode) }}>▼</span> end of
-              data
+              <span style={{ color: exitReasonColor('end_of_data', theme) }}>▼</span> end of data
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-0.5 w-4" style={{ background: theme.series[1] }} />
@@ -227,8 +234,8 @@ export function BacktestPage() {
                     {fmtUsd(Math.abs(cumPnlCents))}
                   </TableCell>
                   <TableCell>{trade.holdTradingDays}d</TableCell>
-                  <TableCell style={{ color: exitReasonColor(trade.exitReason, theme.mode) }}>
-                    {trade.exitReason.replace('_', ' ')}
+                  <TableCell style={{ color: exitReasonColor(trade.exitReason, theme) }}>
+                    {trade.exitReason.replaceAll('_', ' ')}
                   </TableCell>
                 </TableRow>
               ))}

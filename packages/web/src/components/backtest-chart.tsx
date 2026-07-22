@@ -28,17 +28,17 @@ export interface BacktestChartProps {
   readonly theme: ThemeTokens;
 }
 
-/** Exit-reason colors, shared with the trades table and legend. */
-export function exitReasonColor(reason: BacktestExitReason, mode: 'light' | 'dark'): string {
+/** Exit-reason colors from the theme's semantic tokens, shared with the table and legend. */
+export function exitReasonColor(reason: BacktestExitReason, theme: ThemeTokens): string {
   switch (reason) {
     case 'profit_target':
-      return '#0ca30c';
+      return theme.good;
     case 'stop_loss':
-      return mode === 'light' ? '#d03b3b' : '#e66767';
+      return theme.danger;
     case 'time_exit':
-      return mode === 'light' ? '#eda100' : '#c98500';
+      return theme.warn;
     case 'end_of_data':
-      return '#898781';
+      return theme.muted;
   }
 }
 
@@ -141,7 +141,7 @@ export function BacktestChart({
         time: toTime(trade.exitDateIso),
         position: 'aboveBar',
         shape: 'arrowDown',
-        color: exitReasonColor(trade.exitReason, theme.mode),
+        color: exitReasonColor(trade.exitReason, theme),
         text: `${trade.pnlCents >= 0 ? '+' : '−'}$${Math.abs(Math.round(trade.pnlCents / 100))}`,
       });
     }
@@ -222,12 +222,12 @@ export function BacktestChart({
           `@ ${usd(trade.entryCreditCents)} · Δ${trade.entryDelta.toFixed(2)} · ` +
           `IV ${(trade.entryIv * 100).toFixed(1)}% · IVR ${trade.entryIvRank.toFixed(0)}`,
       );
-      const color = exitReasonColor(trade.exitReason, theme.mode);
+      const color = exitReasonColor(trade.exitReason, theme);
       pushEvent(
         trade.exitDateIso,
         `<span style="color:${color}">▼</span> closed P${strike} @ ${usd(trade.exitCostCents)} · ` +
           `${trade.pnlCents >= 0 ? '+' : '−'}${usd(Math.abs(trade.pnlCents))} ` +
-          `(${trade.exitReason.replace('_', ' ')})`,
+          `(${trade.exitReason.replaceAll('_', ' ')})`,
       );
     }
 
