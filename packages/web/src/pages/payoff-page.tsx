@@ -46,7 +46,7 @@ interface View {
 
 const MAX_LEGS = 7;
 
-export function ResearchPage() {
+export function PayoffPage() {
   const theme = useTheme();
   const todayIso = useMemo(
     () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
