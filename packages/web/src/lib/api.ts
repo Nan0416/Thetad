@@ -134,6 +134,57 @@ export function fetchContractIv(
   return getJson(`/api/research/contract-iv/${occSymbol}${suffix}`);
 }
 
+/** One skew cell: [callCloseCents, callIv, putCloseCents, putIv]. A null
+ * pair means that side has no data (unlisted or untraded on the date);
+ * a price with a null iv means the close had no Black-Scholes solution. */
+export type SkewCell = readonly [number | null, number | null, number | null, number | null];
+
+export interface SkewExpiration {
+  readonly expirationIso: string;
+  readonly dte: number;
+  readonly frequency: ExpirationFrequency | null;
+}
+
+export interface SkewResponse {
+  readonly symbol: string;
+  readonly dateIso: string;
+  readonly spotCents: number;
+  /** Risk-free rate used for every inversion, as a decimal. */
+  readonly rate: number;
+  readonly moneynessPct: number;
+  readonly maxDte: number;
+  /** Ascending; the heatmap's columns. */
+  readonly expirations: readonly SkewExpiration[];
+  /** Ascending; the heatmap's rows. */
+  readonly strikesCents: readonly number[];
+  /** grid[strikeIndex][expirationIndex]; null where nothing traded. */
+  readonly grid: readonly (readonly (SkewCell | null)[])[];
+  readonly droppedExpirations: number;
+  /** Expirations with zero trades on the date (usually not yet listed), hidden. */
+  readonly untradedExpirations: number;
+}
+
+export interface SkewOptions {
+  readonly moneynessPct?: number;
+  readonly maxDte?: number;
+  readonly includeDailies?: boolean;
+  /** Every listed strike in the window instead of the subsampled grid. */
+  readonly allStrikes?: boolean;
+}
+
+export function fetchSkew(
+  symbol: string,
+  dateIso: string,
+  options: SkewOptions = {},
+): Promise<SkewResponse> {
+  const query = new URLSearchParams({ symbol, dateIso });
+  if (options.moneynessPct) query.set('moneynessPct', String(options.moneynessPct));
+  if (options.maxDte) query.set('maxDte', String(options.maxDte));
+  if (options.includeDailies) query.set('includeDailies', 'true');
+  if (options.allStrikes) query.set('allStrikes', 'true');
+  return getJson(`/api/research/skew?${query}`);
+}
+
 /** OCC-style symbol as the engine formats it (no root padding). */
 export function occSymbolFor(
   underlying: string,

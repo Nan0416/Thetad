@@ -63,7 +63,7 @@ function isoDaysBefore(dateIso: string, days: number): string {
 }
 
 /** Daily-close carry-forward lookup of DGS1MO (1-month T-bill), as a decimal. */
-class RateLookup {
+export class RateLookup {
   private readonly points: readonly VolPair[];
 
   private constructor(points: readonly VolPair[]) {
@@ -188,9 +188,8 @@ export function registerVolatilityRoutes(app: FastifyInstance, catalog: DataCata
         const barYear = Number(bar.tsUtc.slice(0, 4));
         years.add(barYear);
         // A late-December date's ~30-DTE monthly rolls into the next year, but
-        // never past the current one: a future-year expiration can't be expired
-        // yet (it would be skipped below), and fetching it would permanently
-        // cache a sparse future chain (getContracts has no TTL).
+        // never past the current one: a future-year expiration can't be
+        // expired yet, so its chain would only be skipped below.
         years.add(Math.min(barYear + 1, currentYear));
       }
       const monthlies: string[] = [];

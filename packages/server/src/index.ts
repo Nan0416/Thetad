@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { loadConfig } from './config';
 import { Engine } from './engine';
 import { registerResearchRoutes } from './research';
+import { registerSkewRoutes } from './skew';
 import { registerVolatilityRoutes } from './volatility';
 
 const config = loadConfig();
@@ -35,6 +36,7 @@ app.get('/api/status', async () => engine.status());
 
 registerResearchRoutes(app, catalog);
 registerVolatilityRoutes(app, catalog);
+registerSkewRoutes(app, catalog);
 
 // SSE: the UI's live feed. Streams only ever carry data outward;
 // all actions go through REST, all decisions happen in the engine loop.
