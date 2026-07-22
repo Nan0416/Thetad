@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import { BacktestPage } from './pages/backtest-page';
 import { PayoffPage } from './pages/payoff-page';
 import { SkewPage } from './pages/skew-page';
 import { VolatilityPage } from './pages/volatility-page';
@@ -36,6 +37,13 @@ export const RESEARCH_CHARTS: readonly ResearchChart[] = [
     description:
       'The implied-vol surface on one past date: strikes × expirations as a heatmap, each cell split call/put. Shows the put skew, the smile across strikes, and the term structure across expirations at a glance.',
     Component: SkewPage,
+  },
+  {
+    slug: 'short-put-backtest',
+    title: 'Short-put backtest',
+    description:
+      'The systematic short put replayed over history with every parameter adjustable: entries and exits marked on the price chart (colored by exit reason), the equity curve and IV rank beneath, and the full trade log as a table.',
+    Component: BacktestPage,
   },
 ];
 
