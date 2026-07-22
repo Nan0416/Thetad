@@ -3,6 +3,7 @@ export * from './occ';
 export * from './calendar';
 export * from './expirations';
 export * from './volatility';
+export * from './skew';
 export * from './black-scholes';
 export * from './types';
 export * from './evaluator';

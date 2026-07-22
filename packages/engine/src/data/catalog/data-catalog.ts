@@ -168,8 +168,10 @@ export interface DataCatalogOptions {
  *   option-minute-bars/<OCC>.json            1-min option bars per contract
  *   option-daily-bars/<OCC>.json             1-day option bars per contract
  *
- * Past years and expired contracts are immutable; current-year files
- * refresh via forceRefresh (the fetch:* scripts' --force).
+ * Past years and expired contracts are immutable. Still-growing files —
+ * current-year contracts/daily bars, open contracts' daily bars — stay
+ * usable for 24h, then refresh on the next touch; forceRefresh (the
+ * fetch:* scripts' --force) skips straight to the provider.
  */
 export class DataCatalog implements ContractCatalog {
   private readonly cache = new TieredCache();
@@ -227,6 +229,10 @@ export class DataCatalog implements ContractCatalog {
       {
         path: join(this.rootDir, 'options', `${symbol}-${year}-contracts.json`),
         schema: yearContractsSchema as z.ZodType<YearContracts>,
+        // Past years are immutable; the current (or a future) year keeps
+        // listing new weeklies, so refresh after 24h (a few requests).
+        isUsable: (cached) =>
+          year < new Date().getUTCFullYear() || isFresh(cached.fetchedAtUtc),
         fetch: async () => {
           const { contracts } = await this.provider.listOptionContracts({
             underlying: symbol,
@@ -308,6 +314,7 @@ export class DataCatalog implements ContractCatalog {
     symbol: string,
     year: number,
     forceRefresh = false,
+    mustCoverIso?: string,
   ): Promise<YearDailyBars> {
     const upper = symbol.toUpperCase();
     return this.cache.get(
@@ -315,10 +322,11 @@ export class DataCatalog implements ContractCatalog {
         path: join(this.rootDir, 'stock-daily-bars', `${upper}-${year}.json`),
         schema: yearDailyBarsSchema as z.ZodType<YearDailyBars>,
         // Past years are immutable; the current year grows a bar per
-        // session, so refresh after 24h (cheap: a single request).
+        // session, so refresh after 24h (cheap: a single request) — or
+        // sooner when the caller needs a session the file may predate.
         isUsable: (cached) =>
           year < new Date().getUTCFullYear() ||
-          Date.now() - Date.parse(cached.fetchedAtUtc) < 24 * 3_600_000,
+          (isFresh(cached.fetchedAtUtc) && coversSession(cached.fetchedAtUtc, mustCoverIso)),
         fetch: async () => {
           const { bars } = await this.provider.getStockDailyBars({ symbol: upper, year });
           return {
@@ -335,14 +343,20 @@ export class DataCatalog implements ContractCatalog {
     );
   }
 
-  /** Daily bars whose UTC date falls in [fromIso, toIso]. */
+  /**
+   * Daily bars whose UTC date falls in [fromIso, toIso]. Pass mustCoverIso
+   * when a specific completed session must be present (e.g. "yesterday"):
+   * a within-TTL current-year file fetched before that session ended is
+   * refreshed instead of served.
+   */
   async getStockDailyBarsRange(
     symbol: string,
     fromIso: string,
     toIso: string,
+    mustCoverIso?: string,
   ): Promise<readonly Bar[]> {
     return this.spliceStockYears(symbol, fromIso, toIso, (year) =>
-      this.getStockDailyBarsRaw(symbol, year),
+      this.getStockDailyBarsRaw(symbol, year, false, mustCoverIso),
     );
   }
 
@@ -387,34 +401,102 @@ export class DataCatalog implements ContractCatalog {
     return tuplesToBars(occSymbol, (await this.getOptionDailyBarsRaw(occSymbol)).bars);
   }
 
+  /**
+   * Daily bars for many contracts at once. Cache hits are served per file;
+   * misses are fetched from the provider in comma-joined batches and written
+   * one file per contract, exactly as the single-contract path writes them
+   * (a contract that never traded caches an empty life). Keyed by OCC symbol.
+   */
+  async getOptionDailyBarsBulk(
+    occSymbols: readonly string[],
+    mustCoverIso?: string,
+  ): Promise<ReadonlyMap<string, readonly Bar[]>> {
+    const unique = [...new Set(occSymbols)];
+    const specs = unique.map((occSymbol) => this.optionBarsSpec(occSymbol, '1Day', mustCoverIso));
+    const snapshots = await this.cache.getMany(specs, async (missingIndices) => {
+      const missingOccs = missingIndices.map((i) => unique[i]!);
+      const fetchedByOcc = new Map<string, ContractMinuteBars>();
+      for (let at = 0; at < missingOccs.length; at += OPTION_BARS_BATCH) {
+        const chunk = missingOccs.slice(at, at + OPTION_BARS_BATCH);
+        // One shared end covers the whole chunk; a contract has no bars
+        // past its own expiration, so the extra days fetch nothing.
+        const endIso = chunk
+          .map((occSymbol) => OccSymbol.parse(occSymbol).expirationIso)
+          .sort()
+          .at(-1)!;
+        const { barsBySymbol } = await this.provider.getMultiOptionDailyBars({
+          occSymbols: chunk,
+          endIso,
+        });
+        for (const occSymbol of chunk) {
+          fetchedByOcc.set(
+            occSymbol,
+            toContractBars(
+              occSymbol,
+              OccSymbol.parse(occSymbol).expirationIso,
+              barsBySymbol[occSymbol] ?? [],
+            ),
+          );
+        }
+      }
+      return missingIndices.map((i) => fetchedByOcc.get(unique[i]!)!);
+    });
+    return new Map(unique.map((occSymbol, i) => [occSymbol, tuplesToBars(occSymbol, snapshots[i]!.bars)]));
+  }
+
+  /** Cache spec shared by the single and bulk readers, so both hit one file. */
+  private optionBarsSpec(occSymbol: string, timeframe: '1Min' | '1Day', mustCoverIso?: string) {
+    const { expirationIso } = OccSymbol.parse(occSymbol);
+    const dir = timeframe === '1Day' ? 'option-daily-bars' : 'option-minute-bars';
+    return {
+      path: join(this.rootDir, dir, `${occSymbol}.json`),
+      schema: contractMinuteBarsSchema as z.ZodType<ContractMinuteBars>,
+      // A complete life (fetched through expiration) is immutable. An open
+      // contract's DAILY file stays usable for 24h (the skew page reads
+      // past-session closes, final once the session ends) — unless the
+      // caller needs a session it may predate; open MINUTE files refetch
+      // and extend on every touch.
+      isUsable: (cached: ContractMinuteBars) =>
+        cached.fetchedThroughIso >= expirationIso ||
+        (timeframe === '1Day' &&
+          isFresh(cached.fetchedAtUtc) &&
+          coversSession(cached.fetchedThroughIso, mustCoverIso)),
+    };
+  }
+
   private async optionBarsRaw(
     occSymbol: string,
     timeframe: '1Min' | '1Day',
   ): Promise<ContractMinuteBars> {
     const { expirationIso } = OccSymbol.parse(occSymbol);
-    const dir = timeframe === '1Day' ? 'option-daily-bars' : 'option-minute-bars';
     return this.cache.get({
-      path: join(this.rootDir, dir, `${occSymbol}.json`),
-      schema: contractMinuteBarsSchema as z.ZodType<ContractMinuteBars>,
-      // Only a complete life (fetched through expiration) is served from
-      // cache; still-active contracts refetch and extend on each touch.
-      isUsable: (cached) => cached.fetchedThroughIso >= expirationIso,
+      ...this.optionBarsSpec(occSymbol, timeframe),
       fetch: async () => {
         const { bars } =
           timeframe === '1Day'
             ? await this.provider.getOptionDailyBars({ occSymbol, endIso: expirationIso })
             : await this.provider.getOptionMinuteBars({ occSymbol, endIso: expirationIso });
-        const todayIso = new Date().toISOString().slice(0, 10);
-        return {
-          v: 1 as const,
-          occSymbol,
-          fetchedAtUtc: new Date().toISOString(),
-          fetchedThroughIso: expirationIso <= todayIso ? expirationIso : todayIso,
-          bars: bars.map(toTuple),
-        };
+        return toContractBars(occSymbol, expirationIso, bars);
       },
     });
   }
+}
+
+/** Batch size for the multi-symbol daily-bars endpoint (URL-length bound). */
+const OPTION_BARS_BATCH = 100;
+
+/** The shared freshness window for growing datasets (current-year files, open contracts). */
+function isFresh(fetchedAtUtc: string): boolean {
+  return Date.now() - Date.parse(fetchedAtUtc) < 24 * 3_600_000;
+}
+
+/**
+ * Whether a growing file already contains the completed session of
+ * `mustCoverIso`: its stamp (a fetch instant or fetched-through date) must
+ * sit on a LATER UTC day — a same-day fetch may hold a partial session.
+ */
+function coversSession(stampIso: string, mustCoverIso: string | undefined): boolean {
+  return mustCoverIso === undefined || stampIso.slice(0, 10) > mustCoverIso;
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +525,21 @@ function toYearContracts(
     };
   }
   return { v: 1, underlying, year, fetchedAtUtc: new Date().toISOString(), expirations };
+}
+
+function toContractBars(
+  occSymbol: string,
+  expirationIso: string,
+  bars: readonly AlpacaBar[],
+): ContractMinuteBars {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return {
+    v: 1,
+    occSymbol,
+    fetchedAtUtc: new Date().toISOString(),
+    fetchedThroughIso: expirationIso <= todayIso ? expirationIso : todayIso,
+    bars: bars.map(toTuple),
+  };
 }
 
 function toTuple(bar: AlpacaBar): MinuteBarTuple {

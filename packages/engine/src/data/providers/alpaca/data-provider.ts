@@ -95,6 +95,17 @@ export interface GetOptionDailyBarsResponse {
   readonly bars: readonly AlpacaBar[];
 }
 
+export interface GetMultiOptionDailyBarsRequest {
+  /** One paged request cycle per call — callers chunk to keep the URL bounded. */
+  readonly occSymbols: readonly string[];
+  /** Fetch through this date (inclusive); start is Alpaca's data floor. */
+  readonly endIso: string;
+}
+export interface GetMultiOptionDailyBarsResponse {
+  /** Bars per requested symbol; a contract that never traded has no entry. */
+  readonly barsBySymbol: Readonly<Record<string, readonly AlpacaBar[]>>;
+}
+
 export class AlpacaDataProvider {
   private readonly dataHttp: AlpacaHttp;
   private readonly tradingHttp: AlpacaHttp;
@@ -183,6 +194,35 @@ export class AlpacaDataProvider {
     request: GetOptionDailyBarsRequest,
   ): Promise<GetOptionDailyBarsResponse> {
     return { bars: await this.getOptionBarsPaged(request.occSymbol, request.endIso, '1Day') };
+  }
+
+  /** The same bars endpoint, comma-joined symbols — one request cycle for a chain slice. */
+  async getMultiOptionDailyBars(
+    request: GetMultiOptionDailyBarsRequest,
+  ): Promise<GetMultiOptionDailyBarsResponse> {
+    const barsBySymbol: Record<string, AlpacaBar[]> = {};
+    let pageToken: string | undefined;
+    do {
+      const query: Record<string, string> = {
+        symbols: request.occSymbols.join(','),
+        timeframe: '1Day',
+        start: OPTIONS_DATA_FLOOR_ISO,
+        end: `${request.endIso}T23:59:59Z`,
+        limit: '10000',
+      };
+      if (pageToken) query.page_token = pageToken;
+      const page = await this.dataHttp.request(
+        optionBarsResponseSchema,
+        'GET',
+        '/v1beta1/options/bars',
+        { query },
+      );
+      for (const [symbol, bars] of Object.entries(page.bars ?? {})) {
+        (barsBySymbol[symbol] ??= []).push(...bars);
+      }
+      pageToken = page.next_page_token ?? undefined;
+    } while (pageToken);
+    return { barsBySymbol };
   }
 
   private async getOptionBarsPaged(
