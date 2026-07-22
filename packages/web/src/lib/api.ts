@@ -185,6 +185,101 @@ export function fetchSkew(
   return getJson(`/api/research/skew?${query}`);
 }
 
+export type BacktestExitReason = 'profit_target' | 'stop_loss' | 'time_exit' | 'end_of_data';
+
+/** One closed short-put round trip, money in integer cents. */
+export interface BacktestTrade {
+  readonly occSymbol: string;
+  readonly strikeCents: number;
+  readonly expirationIso: string;
+  readonly entryDateIso: string;
+  readonly entryCreditCents: number;
+  readonly entryDelta: number;
+  readonly entryIv: number;
+  readonly entryIvRank: number;
+  readonly entrySpotCents: number;
+  readonly exitDateIso: string;
+  readonly exitReason: BacktestExitReason;
+  readonly exitCostCents: number;
+  readonly pnlCents: number;
+  readonly holdTradingDays: number;
+}
+
+export interface BacktestMetrics {
+  readonly tradeCount: number;
+  readonly totalPnlCents: number;
+  readonly winRate: number;
+  readonly avgWinCents: number;
+  readonly avgLossCents: number;
+  readonly expectancyCents: number;
+  readonly maxDrawdownCents: number;
+  readonly exitBreakdown: Readonly<Record<BacktestExitReason, number>>;
+  readonly avgHoldTradingDays: number;
+  readonly exposureRate: number;
+  readonly filterBlockRate: number;
+  readonly annualizedReturnPct: number;
+}
+
+/** [dateIso, equityCents, ivRank|null, inPosition 0|1]. */
+export type EquityPointTuple = readonly [string, number, number | null, number];
+
+export interface ShortPutBacktestResponse {
+  readonly params: {
+    readonly underlying: string;
+    readonly dteMin: number;
+    readonly dteMax: number;
+    readonly targetDelta: number;
+    readonly deltaTolerance: number;
+    readonly minIvRank: number;
+    readonly profitTargetBps: number;
+    readonly stopLossBps: number;
+    readonly timeExitDte: number;
+    readonly slippageCents: number;
+    readonly feePerContractCents: number;
+    readonly rate: number;
+    readonly divYield: number;
+    readonly ivRankLookbackDays: number;
+    readonly ivRankMinObservations: number;
+    readonly startIso: string;
+    readonly endIso: string;
+  };
+  readonly metrics: BacktestMetrics;
+  readonly trades: readonly BacktestTrade[];
+  readonly equityCurve: readonly EquityPointTuple[];
+}
+
+/** All optional — the daemon fills the CLI runner's defaults. */
+export interface ShortPutBacktestOptions {
+  readonly underlying?: string;
+  readonly startIso?: string;
+  readonly endIso?: string;
+  readonly dteMin?: number;
+  readonly dteMax?: number;
+  readonly targetDelta?: number;
+  readonly deltaTolerance?: number;
+  readonly minIvRank?: number;
+  readonly profitPct?: number;
+  readonly stopPct?: number;
+  readonly timeExitDte?: number;
+  readonly slippageCents?: number;
+  readonly feeCents?: number;
+  readonly ratePct?: number;
+  readonly divYieldPct?: number;
+  readonly ivLookback?: number;
+  readonly ivMinObs?: number;
+}
+
+export function fetchShortPutBacktest(
+  options: ShortPutBacktestOptions = {},
+): Promise<ShortPutBacktestResponse> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  const suffix = query.size > 0 ? `?${query}` : '';
+  return getJson(`/api/research/backtest/short-put${suffix}`);
+}
+
 /** OCC-style symbol as the engine formats it (no root padding). */
 export function occSymbolFor(
   underlying: string,

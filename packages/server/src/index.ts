@@ -1,23 +1,31 @@
 import fastifyStatic from '@fastify/static';
-import { AlpacaDataProvider, AlpacaHttp, DataCatalog, FredDataProvider } from '@thetad/engine';
+import {
+  AlpacaDataProvider,
+  AlpacaHistoricalData,
+  AlpacaHttp,
+  DataCatalog,
+  FredDataProvider,
+} from '@thetad/engine';
 import Fastify from 'fastify';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { loadConfig } from './config';
 import { Engine } from './engine';
+import { registerBacktestRoutes } from './backtest';
 import { registerResearchRoutes } from './research';
 import { registerSkewRoutes } from './skew';
 import { registerVolatilityRoutes } from './volatility';
 
 const config = loadConfig();
 const engine = new Engine(config);
+const dataHttp = new AlpacaHttp({
+  keyId: config.alpaca.keyId,
+  secretKey: config.alpaca.secretKey,
+  baseUrl: config.alpaca.dataBaseUrl,
+});
 const catalog = new DataCatalog({
   provider: new AlpacaDataProvider({
-    dataHttp: new AlpacaHttp({
-      keyId: config.alpaca.keyId,
-      secretKey: config.alpaca.secretKey,
-      baseUrl: config.alpaca.dataBaseUrl,
-    }),
+    dataHttp,
     tradingHttp: new AlpacaHttp({
       keyId: config.alpaca.keyId,
       secretKey: config.alpaca.secretKey,
@@ -27,6 +35,8 @@ const catalog = new DataCatalog({
   fredProvider: new FredDataProvider({ apiKey: config.fredApiKey }),
   rootDir: config.dataDir,
 });
+// Backtest daily closes share the CLI runner's cache tree.
+const backtestData = new AlpacaHistoricalData(dataHttp, join(config.dataDir, 'backtest-cache'));
 
 const app = Fastify({ logger: true });
 
@@ -37,6 +47,7 @@ app.get('/api/status', async () => engine.status());
 registerResearchRoutes(app, catalog);
 registerVolatilityRoutes(app, catalog);
 registerSkewRoutes(app, catalog);
+registerBacktestRoutes(app, catalog, backtestData);
 
 // SSE: the UI's live feed. Streams only ever carry data outward;
 // all actions go through REST, all decisions happen in the engine loop.
